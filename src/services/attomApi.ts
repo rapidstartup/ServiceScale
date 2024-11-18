@@ -12,8 +12,10 @@ export async function getPropertyData(address: string, city: string, state: stri
   }
 
   try {
-    const address1 = encodeURIComponent(address.trim());
-    const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`);
+    // Clean up address and construct query parameters
+    const address1 = encodeURIComponent(address.trim()); // Street address only
+    const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`); // City and state only
+
 
     const response = await fetch(
       `${attomApiBase}/propertyapi/v1.0.0/property/buildingpermits?address1=${address1}&address2=${address2}`,
