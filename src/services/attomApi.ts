@@ -5,8 +5,8 @@ export async function getPropertyData(address: string, city: string, state: stri
   }
 
     // Ensure the environment variables are available
-  const attomApiBase = process.env.ATTOM_API_BASE;
-  const attomApiKey = process.env.ATTOM_API_KEY;
+  const attomApiBase = process.env.VITE_ATTOM_API_BASE;
+  const attomApiKey = process.env.VITE_ATTOM_API_KEY;
 
   if (!attomApiBase || !attomApiKey) {
     throw new Error('Missing ATTOM API configuration in environment variables');
