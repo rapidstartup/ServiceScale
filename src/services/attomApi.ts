@@ -4,6 +4,14 @@ export async function getPropertyData(address: string, city: string, state: stri
     throw new Error('Missing required address information');
   }
 
+    // Ensure the environment variables are available
+  const attomApiBase = process.env.ATTOM_API_BASE;
+  const attomApiKey = process.env.ATTOM_API_KEY;
+
+  if (!attomApiBase || !attomApiKey) {
+    throw new Error('Missing ATTOM API configuration in environment variables');
+  }
+
   try {
     const address1 = encodeURIComponent(address.trim());
     const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`);
