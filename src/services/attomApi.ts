@@ -16,7 +16,7 @@ export async function getPropertyData(address: string, city: string, state: stri
     const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`);
 
     const response = await fetch(
-      `${attomApiBase}/property/buildingpermits?address1=${address1}&address2=${address2}`,
+      `${attomApiBase}/propertyapi/v1.0.0/property/buildingpermits?address1=${address1}&address2=${address2}`,
       {
         headers: {
           'Accept': 'application/json',
