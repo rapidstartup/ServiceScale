@@ -6,16 +6,19 @@ export async function getPropertyData(address: string, city: string, state: stri
   // Ensure the environment variables are available
   const attomApiBase = import.meta.env.VITE_ATTOM_API_BASE;
   const attomApiKey = import.meta.env.VITE_ATTOM_API_KEY;
-  
+
   if (!attomApiBase || !attomApiKey) {
     throw new Error('Missing ATTOM API configuration in environment variables');
   }
 
   try {
-    // Clean up address and construct query parameters
-    const address1 = encodeURIComponent(address.trim()); // Street address only
+    // Extract street address only by removing extra parts like city, state, and zip
+    const cleanAddress = address.split(',')[0].trim(); // Removes everything after the first comma
+    const address1 = encodeURIComponent(cleanAddress); // Street address only
     const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`); // City and state only
 
+    // Log the constructed URL for debugging
+    console.log('Constructed URL:', `${attomApiBase}/propertyapi/v1.0.0/property/buildingpermits?address1=${address1}&address2=${address2}`);
 
     const response = await fetch(
       `${attomApiBase}/propertyapi/v1.0.0/property/buildingpermits?address1=${address1}&address2=${address2}`,
@@ -28,7 +31,7 @@ export async function getPropertyData(address: string, city: string, state: stri
     );
 
     if (!response.ok) {
-      throw new Error(`ATTOM API error: ${response.status}`);
+      throw new Error(`ATTOM API error: ${response.status} ${response.statusText}`);
     }
 
     const data: AttomResponse = await response.json();
