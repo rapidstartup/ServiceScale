@@ -17,6 +17,9 @@ export interface Customer {
   deleted?: boolean;
   created_at?: string;
   updated_at?: string;
+  bedrooms?: string;
+  bathrooms?: string;
+  lotSize?: string;
 }
 
 interface CustomerStore {

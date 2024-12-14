@@ -9,7 +9,7 @@ DROP TABLE IF EXISTS pricebook_entries CASCADE;
 
 -- Create tables with correct columns
 CREATE TABLE customers (
-    id BIGSERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "Names" TEXT,
     "Address1" TEXT,
     "City" TEXT,
@@ -23,7 +23,7 @@ CREATE TABLE customers (
 );
 
 CREATE TABLE templates (
-    id BIGSERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     content TEXT,
     user_id UUID REFERENCES auth.users(id),
@@ -32,9 +32,9 @@ CREATE TABLE templates (
 );
 
 CREATE TABLE quotes (
-    id BIGSERIAL PRIMARY KEY,
-    customer_id BIGINT REFERENCES customers(id),
-    template_id BIGINT REFERENCES templates(id),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID REFERENCES customers(id),
+    template_id UUID REFERENCES templates(id),
     content TEXT,
     user_id UUID REFERENCES auth.users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -42,7 +42,7 @@ CREATE TABLE quotes (
 );
 
 CREATE TABLE pricebook_entries (
-    id BIGSERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     price DECIMAL(10,2),
     description TEXT,
@@ -67,8 +67,105 @@ SET
   updated_at = NOW()
 WHERE email = 'admin@admin.com';
 
--- Insert seed data as before...
-[Previous seed data section remains unchanged]
+-- Insert seed data
+-- Admin templates
+INSERT INTO templates (name, content, user_id)
+SELECT 
+    'Default Quote Template',
+    'Dear {customer_name},\n\nThank you for your interest in our services. Here is your quote:\n\n{quote_details}\n\nTotal: ${total}\n\nBest regards,\nYour Company',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
+
+INSERT INTO templates (name, content, user_id)
+SELECT 
+    'Professional Quote Template',
+    'Dear {customer_name},\n\nWe appreciate your business inquiry. Please find your customized quote below:\n\n{quote_details}\n\nSubtotal: ${subtotal}\nTax: ${tax}\nTotal: ${total}\n\nThis quote is valid for 30 days.\n\nBest regards,\nYour Company',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
+
+-- Sample pricebook entries for admin
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Basic Service',
+    99.99,
+    'Standard service package',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
+
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Premium Service',
+    199.99,
+    'Premium service package with additional features',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
+
+-- Sample data for regular user
+-- Sample customers
+INSERT INTO customers ("Names", "Address1", "City", "State", "PostalCode", "CombinedAddress", user_id, "uploadId")
+SELECT 
+    'John Smith',
+    '123 Main St',
+    'Anytown',
+    'CA',
+    '12345',
+    '123 Main St, Anytown, CA 12345',
+    id,
+    'manual-entry-1'
+FROM auth.users WHERE email = 'user@example.com';
+
+INSERT INTO customers ("Names", "Address1", "City", "State", "PostalCode", "CombinedAddress", user_id, "uploadId")
+SELECT 
+    'Jane Doe',
+    '456 Oak Ave',
+    'Somewhere',
+    'NY',
+    '67890',
+    '456 Oak Ave, Somewhere, NY 67890',
+    id,
+    'manual-entry-2'
+FROM auth.users WHERE email = 'user@example.com';
+
+-- Sample pricebook entries for user
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Custom Service A',
+    149.99,
+    'Customized service package A',
+    id
+FROM auth.users WHERE email = 'user@example.com';
+
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Custom Service B',
+    249.99,
+    'Customized service package B',
+    id
+FROM auth.users WHERE email = 'user@example.com';
+
+-- Sample quotes for user's customers
+WITH user_data AS (
+    SELECT id AS user_id FROM auth.users WHERE email = 'user@example.com'
+),
+customer_data AS (
+    SELECT id AS customer_id 
+    FROM customers c, user_data 
+    WHERE c.user_id = user_data.user_id 
+    LIMIT 1
+),
+template_data AS (
+    SELECT id AS template_id 
+    FROM templates 
+    WHERE name = 'Default Quote Template' 
+    LIMIT 1
+)
+INSERT INTO quotes (customer_id, template_id, content, user_id)
+SELECT 
+    customer_data.customer_id,
+    template_data.template_id,
+    'Customized quote content for basic service package',
+    user_data.user_id
+FROM user_data, customer_data, template_data;
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "Customers access policy" ON customers;
@@ -214,7 +311,4 @@ GRANT ALL ON customers TO authenticated;
 GRANT ALL ON templates TO authenticated;
 GRANT ALL ON quotes TO authenticated;
 GRANT ALL ON pricebook_entries TO authenticated;
-GRANT USAGE ON SEQUENCE customers_id_seq TO authenticated;
-GRANT USAGE ON SEQUENCE templates_id_seq TO authenticated;
-GRANT USAGE ON SEQUENCE quotes_id_seq TO authenticated;
-GRANT USAGE ON SEQUENCE pricebook_entries_id_seq TO authenticated; 
+  

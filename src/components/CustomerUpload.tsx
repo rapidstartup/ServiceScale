@@ -1,26 +1,47 @@
 import React, { useState, useMemo } from 'react';
 import { parse } from 'papaparse';
-import { Users, Plus, ChevronDown, ChevronUp, Database, FileText, Search } from 'lucide-react';
+import { Users, Plus, ChevronDown, ChevronUp, Database, FileText, Search, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import FileDropzone from './shared/FileDropzone';
 import DataTable from './shared/DataTable';
-import { useCustomerStore } from '../store/customerStore';
+import { Customer, useCustomerStore } from '../store/customerStore';
 import { getPropertyData } from '../services/attomApi';
 import { calculateHVACZones } from '../utils/hvacCalculator';
 import { useQuoteStore } from '../store/quoteStore';
-import { usePricebookStore } from '../store/pricebookStore';
+import { useTemplateStore } from '../store/templateStore';
+
+interface CSVRow {
+  [key: string]: string | undefined;
+  Names?: string;
+  Name?: string;
+  names?: string;
+  Address1?: string;
+  'Address 1'?: string;
+  address1?: string;
+  address?: string;
+  City?: string;
+  city?: string;
+  State?: string;
+  state?: string;
+  PostalCode?: string;
+  'Postal Code'?: string;
+  postalcode?: string;
+  postal_code?: string;
+  zip?: string;
+  Email?: string;
+}
 
 const CustomerUpload: React.FC = () => {
-  const { customers, addCustomers, removeCustomersByUploadId, updateCustomer, deleteCustomer, undeleteCustomer } = useCustomerStore();
-  const { entries: pricebookEntries } = usePricebookStore();
+  const { customers, addCustomers, updateCustomer, deleteCustomer, undeleteCustomer, removeCustomersByUploadId } = useCustomerStore();
   const { addQuote } = useQuoteStore();
+  const { templates } = useTemplateStore();
   const [isUploadOpen, setIsUploadOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [isLoadingPropertyData, setIsLoadingPropertyData] = useState(false);
   const [isGeneratingQuotes, setIsGeneratingQuotes] = useState(false);
-  const [showEditModal, setShowEditModal] = useState<any | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState<any | null>(null);
+  const [showEditModal, setShowEditModal] = useState<Customer | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState<Customer | null>(null);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   const [filters, setFilters] = useState({
     uploadId: '',
@@ -42,16 +63,18 @@ const CustomerUpload: React.FC = () => {
     yearBuilt: ''
   });
 
-  const handleEdit = (customer: any) => {
-    setShowEditModal(customer);
+  const [showDeleteUploadModal, setShowDeleteUploadModal] = useState<string | null>(null);
+
+  const handleEdit = (customer: Record<string, unknown>) => {
+    setShowEditModal(customer as unknown as Customer);
   };
 
-  const handleDelete = (customer: any) => {
-    setShowDeleteModal(customer);
+  const handleDelete = (customer: Record<string, unknown>) => {
+    setShowDeleteModal(customer as unknown as Customer);
   };
 
-  const handleUndelete = (customer: any) => {
-    undeleteCustomer(customer.id);
+  const handleUndelete = (customer: Record<string, unknown>) => {
+    undeleteCustomer((customer as unknown as Customer).id);
     toast.success('Customer restored successfully');
   };
 
@@ -92,11 +115,22 @@ const CustomerUpload: React.FC = () => {
     toast.success('Customer created successfully');
   };
 
-  // Rest of the component remains exactly the same...
+  const handleDeleteUpload = (uploadId: string) => {
+    setShowDeleteUploadModal(uploadId);
+  };
+
+  const handleConfirmDeleteUpload = async () => {
+    if (showDeleteUploadModal) {
+      await removeCustomersByUploadId(showDeleteUploadModal);
+      setShowDeleteUploadModal(null);
+      toast.success('Upload deleted successfully');
+    }
+  };
+
   const filterOptions = useMemo(() => {
     return {
       uploads: Array.from(new Set(customers.map(c => c.uploadId)))
-        .filter(Boolean)
+        .filter((id): id is string => id !== undefined && id !== null)
         .map(id => ({
           id,
           name: id === 'manual' ? 'Manually Added' : `Upload ${id}`,
@@ -118,7 +152,7 @@ const CustomerUpload: React.FC = () => {
     reader.onload = async (e) => {
       try {
         const csv = e.target?.result;
-        const results = parse(csv as string, {
+        const results = parse<CSVRow>(csv as string, {
           header: true,
           skipEmptyLines: true,
         });
@@ -128,10 +162,24 @@ const CustomerUpload: React.FC = () => {
           return;
         }
 
+        // Map CSV columns to database columns
+        const mappedData = results.data.map((row: CSVRow) => ({
+          name: row['Names'] || row['Name'] || row['names'] || row['name'] || '',
+          email: row['Email'] || row['email'] || '',
+          address: row['Address1'] || row['Address 1'] || row['address1'] || row['address'] || '',
+          city: row['City'] || row['city'] || '',
+          state: row['State'] || row['state'] || '',
+          propertyType: '',
+          propertySize: '',
+          yearBuilt: '',
+          uploadId: uploadId
+        }));
+
         const uploadId = Date.now().toString();
-        addCustomers(results.data, uploadId);
+        addCustomers(mappedData, uploadId);
         toast.success('Customer data uploaded successfully');
       } catch (error) {
+        console.error('Upload error:', error);
         toast.error('Failed to process the file');
       }
     };
@@ -215,16 +263,14 @@ const CustomerUpload: React.FC = () => {
             halfBaths: 0
           });
 
-          const quoteId = `Q${Date.now().toString().slice(-6)}`;
-          
           addQuote({
-            id: quoteId,
             status: 'active',
-            customerName: customer.name,
+            customer_id: customer.id,
             service: `${zones}-Zone HVAC System`,
             total: zones * 5000,
-            createdAt: new Date().toISOString(),
-            propertyDetails: {
+            template_id: templates.find(t => t.is_default)?.id || '',
+            created_at: new Date().toISOString(),
+            property_details: {
               address: {
                 streetAddress: customer.address,
                 city: customer.city,
@@ -373,20 +419,31 @@ const CustomerUpload: React.FC = () => {
                 <h3 className="text-lg font-semibold mb-4">Previous Uploads</h3>
                 <div className="space-y-4 max-h-64 overflow-y-auto">
                   {filterOptions.uploads.map((upload) => (
-                    <button
+                    <div
                       key={upload.id}
-                      onClick={() => setFilters({ ...filters, uploadId: upload.id })}
-                      className={`w-full text-left p-4 rounded-lg transition-colors ${
-                        filters.uploadId === upload.id
-                          ? 'bg-blue-50 border-2 border-blue-200'
-                          : 'bg-gray-50 hover:bg-gray-100'
-                      }`}
+                      className="flex items-center justify-between"
                     >
-                      <p className="font-medium">{upload.name}</p>
-                      <p className="text-sm text-gray-600">
-                        {upload.count} records
-                      </p>
-                    </button>
+                      <button
+                        onClick={() => setFilters({ ...filters, uploadId: upload.id })}
+                        className={`flex-1 text-left p-4 rounded-lg transition-colors ${
+                          filters.uploadId === upload.id
+                            ? 'bg-blue-50 border-2 border-blue-200'
+                            : 'bg-gray-50 hover:bg-gray-100'
+                        }`}
+                      >
+                        <p className="font-medium">{upload.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {upload.count} records
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUpload(upload.id)}
+                        className="ml-2 p-2 text-gray-500 hover:text-red-500 rounded-lg"
+                        title="Delete Upload"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -643,6 +700,31 @@ const CustomerUpload: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Create Customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
+            <h2 className="text-xl font-bold mb-4">Delete Upload</h2>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this upload? This will remove all customers associated with this upload.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowDeleteUploadModal(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteUpload}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete Upload
               </button>
             </div>
           </div>
