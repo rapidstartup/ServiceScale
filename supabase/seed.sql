@@ -23,6 +23,7 @@ DROP POLICY IF EXISTS "Enable read for user's own data" ON public.customers;
 DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.customers;
 DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.customers;
 DROP POLICY IF EXISTS "Enable access for admins and own data for users" ON public.customers;
+DROP POLICY IF EXISTS "Customers access policy" ON public.customers;
 
 -- Simplified customer policies
 CREATE POLICY "Customers access policy"
@@ -51,6 +52,12 @@ CREATE POLICY "Customers access policy"
       ELSE auth.uid() = user_id
     END
   );
+
+-- Drop pricebook policies
+DROP POLICY IF EXISTS "Enable read for admins" ON public.pricebook_entries;
+DROP POLICY IF EXISTS "Enable read for user's own data" ON public.pricebook_entries;
+DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.pricebook_entries;
+DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.pricebook_entries;
 
 -- Pricebook policies
 CREATE POLICY "Enable read for admins"
@@ -82,6 +89,10 @@ DROP POLICY IF EXISTS "Enable read for admins" ON public.templates;
 DROP POLICY IF EXISTS "Enable read for user's own data" ON public.templates;
 DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.templates;
 DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.templates;
+DROP POLICY IF EXISTS "Enable read for all users" ON public.templates;
+DROP POLICY IF EXISTS "Enable insert for admins only" ON public.templates;
+DROP POLICY IF EXISTS "Enable update for admins only" ON public.templates;
+DROP POLICY IF EXISTS "Enable delete for admins only" ON public.templates;
 
 -- New template policies
 CREATE POLICY "Enable read for all users"
@@ -150,6 +161,12 @@ SET
   is_default = EXCLUDED.is_default,
   sections = EXCLUDED.sections;
 
+-- Drop quotes policies
+DROP POLICY IF EXISTS "Enable read for admins" ON public.quotes;
+DROP POLICY IF EXISTS "Enable read for user's own data" ON public.quotes;
+DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.quotes;
+DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.quotes;
+
 -- Quotes policies
 CREATE POLICY "Enable read for admins"
   ON public.quotes
@@ -174,6 +191,12 @@ CREATE POLICY "Enable update for admins or own data"
   FOR UPDATE
   TO authenticated
   USING (auth.is_admin() OR auth.uid() = user_id);
+
+-- Drop settings policies
+DROP POLICY IF EXISTS "Enable read for admins" ON public.settings;
+DROP POLICY IF EXISTS "Enable read for user's own data" ON public.settings;
+DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.settings;
+DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.settings;
 
 -- Settings policies
 CREATE POLICY "Enable read for admins"
@@ -206,4 +229,17 @@ ALTER TABLE public.pricebook_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+
+-- Create admin check function
+CREATE OR REPLACE FUNCTION auth.is_admin()
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 
+    FROM auth.users 
+    WHERE id = auth.uid() 
+    AND raw_user_meta_data->>'is_admin' = 'true'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
   

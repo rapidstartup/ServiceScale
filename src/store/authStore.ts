@@ -35,7 +35,7 @@ export const useAuthStore = create<AuthStore>()(
           throw new Error('No user data returned');
         }
 
-        const role = data.user.user_metadata.role || 'user';
+        const role = data.user.user_metadata.is_admin === true ? 'admin' : 'user';
         
         set({
           isAuthenticated: true,
