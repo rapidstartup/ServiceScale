@@ -61,17 +61,29 @@ const TemplateEditor: React.FC = () => {
     }
   }, [id, templates, isAdmin, navigate]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!template) return;
 
-    if (id === 'new') {
-      addTemplate(template);
-      toast.success('Template created successfully');
-    } else {
-      updateTemplate(template.id, template);
-      toast.success('Template updated successfully');
+    try {
+      if (id === 'new') {
+        await addTemplate({
+          ...template,
+          sections: template.sections || [],
+          preview_image: template.preview_image || DEFAULT_NEW_TEMPLATE.preview_image
+        });
+        toast.success('Template created successfully');
+      } else {
+        await updateTemplate(template.id, {
+          ...template,
+          sections: template.sections || []
+        });
+        toast.success('Template updated successfully');
+      }
+      navigate('/templates');
+    } catch (error) {
+      console.error('Template save error:', error);
+      toast.error('Failed to save template');
     }
-    navigate('/templates');
   };
 
   const addSection = () => {

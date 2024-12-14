@@ -27,6 +27,9 @@ CREATE TABLE templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     content TEXT,
+    preview_image TEXT DEFAULT 'https://images.unsplash.com/photo-1460472178825-e5240623afd5?w=600&h=400&fit=crop',
+    sections JSONB DEFAULT '[]'::jsonb,
+    is_default BOOLEAN DEFAULT false,
     user_id UUID REFERENCES auth.users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -98,6 +101,9 @@ INSERT INTO templates (name, content, user_id)
 SELECT 
     'Default Quote Template',
     'Dear {customer_name},\n\nThank you for your interest in our services. Here is your quote:\n\n{quote_details}\n\nTotal: ${total}\n\nBest regards,\nYour Company',
+    preview_image = 'https://images.unsplash.com/photo-1460472178825-e5240623afd5?w=600&h=400&fit=crop',
+    sections = '[{"id":"section-1","type":"header","title":"Welcome","content":"<p>Thank you for considering our services.</p>","order":0,"settings":{"backgroundColor":"#ffffff","textColor":"#000000","layout":"left"}}]',
+    is_default = true,
     id
 FROM auth.users WHERE email = 'admin@admin.com';
 
@@ -105,6 +111,8 @@ INSERT INTO templates (name, content, user_id)
 SELECT 
     'Professional Quote Template',
     'Dear {customer_name},\n\nWe appreciate your business inquiry. Please find your customized quote below:\n\n{quote_details}\n\nSubtotal: ${subtotal}\nTax: ${tax}\nTotal: ${total}\n\nThis quote is valid for 30 days.\n\nBest regards,\nYour Company',
+    preview_image = 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=600&h=400&fit=crop',
+    sections = '[{"id":"section-2","type":"content","title":"Our Proposal","content":"<p>Here is our detailed proposal for your project.</p>","order":0,"settings":{"backgroundColor":"#f8fafc","textColor":"#000000","layout":"left"}}]',
     id
 FROM auth.users WHERE email = 'admin@admin.com';
 
