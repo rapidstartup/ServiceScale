@@ -5,7 +5,8 @@ export async function getPropertyData(address: string, city: string, state: stri
     throw new Error('Missing required address information');
   }
 
-  const attomApiBase = import.meta.env.VITE_ATTOM_API_BASE_URL;
+  // Ensure the environment variables are available
+  const attomApiBase = import.meta.env.VITE_ATTOM_API_BASE;
   const attomApiKey = import.meta.env.VITE_ATTOM_API_KEY;
 
   if (!attomApiBase || !attomApiKey) {
@@ -17,9 +18,6 @@ export async function getPropertyData(address: string, city: string, state: stri
     const cleanAddress = address.split(',')[0].trim(); // Removes everything after the first comma
     const address1 = encodeURIComponent(cleanAddress); // Street address only
     const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`); // City and state only
-
-    // Log the constructed URL for debugging
-    console.log('Constructed URL:', `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`);
 
     const response = await fetch(
       `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`,
@@ -42,19 +40,21 @@ export async function getPropertyData(address: string, city: string, state: stri
     }
 
     const property = data.property[0];
+    const building = property.building;
+    const summary = property.summary;
 
     return {
-      propertyType: property.summary?.propClass || 'Unknown',
-      propertySize: property.building?.size?.universalSize
-        ? `${property.building.size.universalSize.toLocaleString()} sqft`
+      propertyType: summary?.propClass || 'Unknown',
+      propertySize: building?.size?.universalSize 
+        ? `${building.size.universalSize.toLocaleString()} sqft`
         : 'Not available',
       lotSize: property.lot?.lotSize1
-        ? `${Math.round(property.lot.lotSize1 * 43560).toLocaleString()} sqft`
+        ? `${Math.round(property.lot.lotSize1 * 43560).toLocaleString()} sqft` // Convert acres to sqft
         : 'Not available',
-      yearBuilt: property.summary?.yearBuilt?.toString() || 'Unknown',
-      bedrooms: property.building?.rooms?.beds?.toString() || '0',
-      bathrooms: property.building?.rooms?.bathsTotal?.toString() || '0',
-      recentPermits: []
+      yearBuilt: summary?.yearBuilt?.toString() || 'Unknown',
+      bedrooms: building?.rooms?.beds?.toString() || '0',
+      bathrooms: building?.rooms?.bathsTotal?.toString() || '0',
+      recentPermits: [] // Since basicprofile endpoint doesn't include permit data
     };
   } catch (error) {
     console.error('ATTOM API Error:', error);
