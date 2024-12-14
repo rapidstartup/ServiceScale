@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { supabase } from '../lib/supabase';
 
-interface User {
+export interface User {
+  id: string;
   email: string;
   name: string;
   role: 'admin' | 'user';
@@ -11,7 +13,7 @@ interface AuthStore {
   isAuthenticated: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -20,22 +22,37 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       user: null,
       login: async (email: string, password: string) => {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // For demo purposes, make any email ending with @admin.com an admin
-        const isAdmin = email.toLowerCase().endsWith('@admin.com');
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data.user) {
+          throw new Error('No user data returned');
+        }
+
+        const role = data.user.user_metadata.role || 'user';
         
         set({
           isAuthenticated: true,
           user: {
-            email,
-            name: email.split('@')[0],
-            role: isAdmin ? 'admin' : 'user'
+            id: data.user.id,
+            email: data.user.email!,
+            name: data.user.user_metadata.name || email.split('@')[0],
+            role
           }
         });
       },
-      logout: () => {
+      logout: async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          throw error;
+        }
+        
         set({
           isAuthenticated: false,
           user: null

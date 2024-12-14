@@ -1,93 +1,183 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from './authStore';
 
 export interface PricebookEntry {
   id: string;
+  user_id: string;
   sku: string;
   name: string;
   category: string;
   price: number;
   unit: string;
-  uploadId?: string;
+  upload_id?: string;
   deleted?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
-
-// Initial dummy data for demonstration
-const springPrices = Array(245).fill({}).map((_, i) => ({
-  id: `spring-${i + 1}`,
-  sku: `SKU${1000 + i}`,
-  name: `Product ${i + 1}`,
-  category: ['HVAC', 'Plumbing', 'Electrical'][i % 3],
-  price: (50 + i * 2.5) * 100,
-  unit: ['each', 'hour', 'ft'][i % 3],
-  uploadId: '1'
-}));
-
-const winterPrices = Array(198).fill({}).map((_, i) => ({
-  id: `winter-${i + 1}`,
-  sku: `SKU${2000 + i}`,
-  name: `Product ${i + 1}`,
-  category: ['HVAC', 'Plumbing', 'Electrical'][i % 3],
-  price: (45 + i * 2.5) * 100,
-  unit: ['each', 'hour', 'ft'][i % 3],
-  uploadId: '2'
-}));
 
 interface PricebookStore {
   entries: PricebookEntry[];
   selectedUploadId: string | null;
-  addEntries: (entries: PricebookEntry[], uploadId: string) => void;
-  removeEntriesByUploadId: (uploadId: string) => void;
+  isLoading: boolean;
+  error: string | null;
+  fetchEntries: () => Promise<void>;
+  addEntries: (entries: Omit<PricebookEntry, 'id' | 'user_id'>[], uploadId: string) => Promise<void>;
+  removeEntriesByUploadId: (uploadId: string) => Promise<void>;
   setSelectedUploadId: (uploadId: string | null) => void;
-  updateEntry: (id: string, updates: Partial<PricebookEntry>) => void;
-  deleteEntry: (id: string) => void;
-  undeleteEntry: (id: string) => void;
+  updateEntry: (id: string, updates: Partial<PricebookEntry>) => Promise<void>;
+  deleteEntry: (id: string) => Promise<void>;
+  undeleteEntry: (id: string) => Promise<void>;
 }
 
-export const usePricebookStore = create<PricebookStore>()(
-  persist(
-    (set) => ({
-      entries: [...springPrices, ...winterPrices],
-      selectedUploadId: null,
-      addEntries: (newEntries, uploadId) =>
-        set((state) => ({
-          entries: [
-            ...state.entries,
-            ...newEntries.map(entry => ({
-              ...entry,
-              id: `${uploadId}-${Math.random().toString(36).substr(2, 9)}`,
-              uploadId
-            }))
-          ]
-        })),
-      removeEntriesByUploadId: (uploadId) =>
-        set((state) => ({
-          entries: state.entries.filter(entry => entry.uploadId !== uploadId),
-          selectedUploadId: state.selectedUploadId === uploadId ? null : state.selectedUploadId
-        })),
-      setSelectedUploadId: (uploadId) =>
-        set({ selectedUploadId: uploadId }),
-      updateEntry: (id, updates) =>
-        set((state) => ({
-          entries: state.entries.map(entry =>
-            entry.id === id ? { ...entry, ...updates } : entry
-          )
-        })),
-      deleteEntry: (id) =>
-        set((state) => ({
-          entries: state.entries.map(entry =>
-            entry.id === id ? { ...entry, deleted: true } : entry
-          )
-        })),
-      undeleteEntry: (id) =>
-        set((state) => ({
-          entries: state.entries.map(entry =>
-            entry.id === id ? { ...entry, deleted: false } : entry
-          )
-        }))
-    }),
-    {
-      name: 'pricebook-storage'
+export const usePricebookStore = create<PricebookStore>()((set) => ({
+  entries: [],
+  selectedUploadId: null,
+  isLoading: false,
+  error: null,
+
+  fetchEntries: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('pricebook_entries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      set({ entries: data || [] });
+    } catch (error) {
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoading: false });
     }
-  )
-);
+  },
+
+  addEntries: async (entries, uploadId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const user = useAuthStore.getState().user;
+      if (!user) throw new Error('User not authenticated');
+
+      const entriesWithMetadata = entries.map(entry => ({
+        ...entry,
+        user_id: user.id,
+        upload_id: uploadId
+      }));
+
+      const { data, error } = await supabase
+        .from('pricebook_entries')
+        .insert(entriesWithMetadata)
+        .select();
+
+      if (error) throw error;
+
+      set(state => ({
+        entries: [...(data || []), ...state.entries]
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  removeEntriesByUploadId: async (uploadId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase
+        .from('pricebook_entries')
+        .delete()
+        .match({ upload_id: uploadId });
+
+      if (error) throw error;
+
+      set(state => ({
+        entries: state.entries.filter(entry => entry.upload_id !== uploadId),
+        selectedUploadId: state.selectedUploadId === uploadId ? null : state.selectedUploadId
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  setSelectedUploadId: (uploadId) => {
+    set({ selectedUploadId: uploadId });
+  },
+
+  updateEntry: async (id, updates) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('pricebook_entries')
+        .update(updates)
+        .match({ id })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        entries: state.entries.map(entry =>
+          entry.id === id ? { ...entry, ...data } : entry
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteEntry: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase
+        .from('pricebook_entries')
+        .update({ deleted: true })
+        .match({ id });
+
+      if (error) throw error;
+
+      set(state => ({
+        entries: state.entries.map(entry =>
+          entry.id === id ? { ...entry, deleted: true } : entry
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  undeleteEntry: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase
+        .from('pricebook_entries')
+        .update({ deleted: false })
+        .match({ id });
+
+      if (error) throw error;
+
+      set(state => ({
+        entries: state.entries.map(entry =>
+          entry.id === id ? { ...entry, deleted: false } : entry
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  }
+}));

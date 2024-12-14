@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { TrendingUp, Mail, Lock } from 'lucide-react';
+import { TrendingUp, Mail, Lock, User } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
-const Login: React.FC = () => {
+const Signup: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -16,11 +18,28 @@ const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
+      // Create user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            role: 'user' // Default role for new signups
+          }
+        }
+      });
+
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('No user data returned');
+
+      // Log the user in
       await login(email, password);
-      toast.success('Welcome back!');
+      
+      toast.success('Welcome to ServiceScale!');
       navigate('/dashboard');
-    } catch {
-      toast.error('Invalid credentials');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to sign up');
     } finally {
       setIsLoading(false);
     }
@@ -33,14 +52,34 @@ const Login: React.FC = () => {
           <div className="flex justify-center">
             <TrendingUp className="h-12 w-12 text-blue-600" />
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">Welcome back</h2>
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">Create your account</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Sign in to your account to continue
+            Join ServiceScale and start managing your service business
           </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm space-y-4">
+            <div>
+              <label htmlFor="name" className="sr-only">
+                Full Name
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="Full Name"
+                />
+              </div>
+            </div>
             <div>
               <label htmlFor="email-address" className="sr-only">
                 Email address
@@ -74,7 +113,7 @@ const Login: React.FC = () => {
                   id="password"
                   name="password"
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -85,38 +124,23 @@ const Login: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-sm">
-              <Link to="/password-reset" className="font-medium text-blue-600 hover:text-blue-500">
-                Forgot your password?
-              </Link>
-            </div>
-          </div>
-
           <div>
             <button
               type="submit"
               disabled={isLoading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing in...' : 'Sign in'}
+              {isLoading ? 'Creating account...' : 'Sign up'}
             </button>
           </div>
 
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
-                Sign up
+              Already have an account?{' '}
+              <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                Sign in
               </Link>
             </p>
-          </div>
-
-          {/* Demo Credentials */}
-          <div className="mt-4 text-center">
-            <p className="text-xs text-gray-500">Demo Credentials:</p>
-            <p className="text-xs text-gray-500">Admin: admin@admin.com / any password</p>
-            <p className="text-xs text-gray-500">User: user@example.com / any password</p>
           </div>
         </form>
       </div>
@@ -124,4 +148,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Signup; 

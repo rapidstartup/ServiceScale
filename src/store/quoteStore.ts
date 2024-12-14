@@ -1,139 +1,198 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { CompanyInfo, Quote } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from './authStore';
 
-interface QuoteStore {
-  companyInfo: CompanyInfo;
-  quotes: Quote[];
-  updateCompanyInfo: (info: Partial<CompanyInfo>) => void;
-  addQuote: (quote: Quote) => void;
-  updateQuote: (id: string, quote: Quote) => void;
-  deleteQuote: (id: string) => void;
-  updateQuoteStatus: (id: string, status: Quote['status']) => void;
-  trackQuoteView: (id: string) => void;
+export interface Quote {
+  id: string;
+  user_id: string;
+  customer_id: string;
+  status: 'active' | 'converted' | 'lost';
+  service: string;
+  total: number;
+  template_id: string;
+  sent_at?: string;
+  opened_at?: string;
+  clicked_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  property_details: {
+    address: {
+      streetAddress: string;
+      city: string;
+      state: string;
+    };
+    type: string;
+    size: string;
+    yearBuilt: string;
+    bedrooms: string;
+    bathrooms: string;
+  };
 }
 
-export const useQuoteStore = create<QuoteStore>()(
-  persist(
-    (set) => ({
-      companyInfo: {
-        name: 'ServiceScale Pro',
-        logo: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=100&h=100&fit=crop',
-        about: 'We are committed to providing top-quality home services with over 20 years of experience in the industry.',
-        phone: '(555) 123-4567',
-        email: 'contact@servicescalepro.com',
-        address: '123 Service Ave, Business District, ST 12345',
-      },
-      quotes: [
-        {
-          id: '2024001',
-          status: 'active',
-          customerName: 'John Smith',
-          service: 'Roof Replacement',
-          total: 12500,
-          createdAt: '2024-03-15',
-          sentAt: '2024-03-15',
-          openedAt: '2024-03-16',
-          templateId: 'default-template',
-          propertyDetails: {
-            address: {
-              streetAddress: '1234 Oak Street',
-              city: 'Springfield',
-              state: 'IL'
-            },
-            type: 'Single Family',
-            size: '2,800 sqft',
-            yearBuilt: '1995',
-            bedrooms: '4',
-            bathrooms: '2.5'
-          }
-        },
-        {
-          id: '2024002',
-          status: 'converted',
-          customerName: 'Sarah Johnson',
-          service: 'Solar Installation',
-          total: 18900,
-          createdAt: '2024-03-14',
-          sentAt: '2024-03-14',
-          openedAt: '2024-03-14',
-          clickedAt: '2024-03-15',
-          templateId: 'default-template',
-          propertyDetails: {
-            address: {
-              streetAddress: '567 Maple Ave',
-              city: 'Springfield',
-              state: 'IL'
-            },
-            type: 'Single Family',
-            size: '3,200 sqft',
-            yearBuilt: '2001',
-            bedrooms: '5',
-            bathrooms: '3'
-          }
-        },
-        {
-          id: '2024003',
-          status: 'lost',
-          customerName: 'Mike Wilson',
-          service: 'HVAC Replacement',
-          total: 8500,
-          createdAt: '2024-03-13',
-          sentAt: '2024-03-13',
-          templateId: 'default-template',
-          propertyDetails: {
-            address: {
-              streetAddress: '789 Pine Street',
-              city: 'Springfield',
-              state: 'IL'
-            },
-            type: 'Single Family',
-            size: '2,100 sqft',
-            yearBuilt: '1988',
-            bedrooms: '3',
-            bathrooms: '2'
-          }
-        },
-      ],
-      updateCompanyInfo: (info) =>
-        set((state) => ({
-          companyInfo: { ...state.companyInfo, ...info },
-        })),
-      addQuote: (quote) =>
-        set((state) => ({
-          quotes: [...state.quotes, quote],
-        })),
-      updateQuote: (id, quote) =>
-        set((state) => ({
-          quotes: state.quotes.map((q) =>
-            q.id === id ? quote : q
-          ),
-        })),
-      deleteQuote: (id) =>
-        set((state) => ({
-          quotes: state.quotes.filter((q) => q.id !== id),
-        })),
-      updateQuoteStatus: (id, status) =>
-        set((state) => ({
-          quotes: state.quotes.map((q) =>
-            q.id === id ? { ...q, status } : q
-          ),
-        })),
-      trackQuoteView: (id) =>
-        set((state) => ({
-          quotes: state.quotes.map((q) =>
-            q.id === id
-              ? {
-                  ...q,
-                  openedAt: q.openedAt || new Date().toISOString(),
-                  clickedAt: new Date().toISOString(),
-                }
-              : q
-          ),
-        })),
-    }),
-    {
-      name: 'quote-storage',
+interface QuoteStore {
+  quotes: Quote[];
+  isLoading: boolean;
+  error: string | null;
+  fetchQuotes: () => Promise<void>;
+  addQuote: (quote: Omit<Quote, 'id' | 'user_id'>) => Promise<void>;
+  updateQuote: (id: string, quote: Partial<Quote>) => Promise<void>;
+  deleteQuote: (id: string) => Promise<void>;
+  updateQuoteStatus: (id: string, status: Quote['status']) => Promise<void>;
+  trackQuoteView: (id: string) => Promise<void>;
+}
+
+export const useQuoteStore = create<QuoteStore>()((set) => ({
+  quotes: [],
+  isLoading: false,
+  error: null,
+
+  fetchQuotes: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      set({ quotes: data || [] });
+    } catch (error) {
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoading: false });
     }
-  )
-);
+  },
+
+  addQuote: async (quote) => {
+    set({ isLoading: true, error: null });
+    try {
+      const user = useAuthStore.getState().user;
+      if (!user) throw new Error('User not authenticated');
+
+      const quoteWithMetadata = {
+        ...quote,
+        user_id: user.id
+      };
+
+      const { data, error } = await supabase
+        .from('quotes')
+        .insert(quoteWithMetadata)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        quotes: [data, ...state.quotes]
+      }));
+
+      return data;
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateQuote: async (id, updates) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('quotes')
+        .update(updates)
+        .match({ id })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        quotes: state.quotes.map(quote =>
+          quote.id === id ? { ...quote, ...data } : quote
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteQuote: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .delete()
+        .match({ id });
+
+      if (error) throw error;
+
+      set(state => ({
+        quotes: state.quotes.filter(quote => quote.id !== id)
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateQuoteStatus: async (id, status) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('quotes')
+        .update({ status })
+        .match({ id })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        quotes: state.quotes.map(quote =>
+          quote.id === id ? { ...quote, ...data } : quote
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  trackQuoteView: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('quotes')
+        .update({
+          opened_at: now,
+          clicked_at: now
+        })
+        .match({ id })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        quotes: state.quotes.map(quote =>
+          quote.id === id ? { ...quote, ...data } : quote
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  }
+}));

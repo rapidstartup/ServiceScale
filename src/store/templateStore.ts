@@ -1,98 +1,179 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { QuoteTemplate } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from './authStore';
 
-interface TemplateStore {
-  templates: QuoteTemplate[];
-  addTemplate: (template: QuoteTemplate) => void;
-  updateTemplate: (id: string, template: Partial<QuoteTemplate>) => void;
-  deleteTemplate: (id: string) => void;
-  setDefaultTemplate: (id: string) => void;
+export interface TemplateSection {
+  id: string;
+  type: 'header' | 'team' | 'content';
+  title: string;
+  content: string;
+  order: number;
+  images?: {
+    id: string;
+    url: string;
+    alt: string;
+    width: number;
+    height: number;
+  }[];
+  settings: {
+    backgroundColor?: string;
+    textColor?: string;
+    layout?: 'left' | 'center' | 'right';
+  };
 }
 
-// Example template based on the provided image
-const initialTemplate: QuoteTemplate = {
-  id: 'default-template',
-  name: 'Professional Roofing Template',
-  description: 'A comprehensive template for roofing services with team profiles and certifications',
-  isDefault: true,
-  createdAt: '2024-03-15',
-  updatedAt: '2024-03-15',
-  previewImage: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=600&h=400&fit=crop',
-  sections: [
-    {
-      id: 'header',
-      type: 'header',
-      title: 'Customer Approval',
-      content: '',
-      order: 1,
-      images: [
-        {
-          id: 'truck-image',
-          url: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=800&h=400&fit=crop',
-          alt: 'Company Truck',
-          width: 800,
-          height: 400
-        }
-      ],
-      settings: {
-        backgroundColor: '#ffffff',
-        textColor: '#000000',
-        layout: 'left'
-      }
-    },
-    {
-      id: 'team',
-      type: 'team',
-      title: 'Your Roofing Team',
-      content: 'Meet our experienced team of roofing professionals',
-      order: 2,
-      images: [
-        {
-          id: 'team-lead',
-          url: 'https://images.unsplash.com/photo-1600486913747-55e5470d6f40?w=200&h=200&fit=crop',
-          alt: 'Team Lead',
-          width: 200,
-          height: 200
-        }
-      ],
-      settings: {
-        backgroundColor: '#f8f9fa',
-        layout: 'center'
-      }
-    },
-    // Add more sections based on the template image...
-  ]
-};
+export interface Template {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  is_default: boolean;
+  preview_image: string;
+  sections: TemplateSection[];
+  created_at?: string;
+  updated_at?: string;
+}
 
-export const useTemplateStore = create<TemplateStore>()(
-  persist(
-    (set) => ({
-      templates: [initialTemplate],
-      addTemplate: (template) =>
-        set((state) => ({
-          templates: [...state.templates, template]
-        })),
-      updateTemplate: (id, updates) =>
-        set((state) => ({
-          templates: state.templates.map((t) =>
-            t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
-          )
-        })),
-      deleteTemplate: (id) =>
-        set((state) => ({
-          templates: state.templates.filter((t) => t.id !== id)
-        })),
-      setDefaultTemplate: (id) =>
-        set((state) => ({
-          templates: state.templates.map((t) => ({
-            ...t,
-            isDefault: t.id === id
-          }))
-        }))
-    }),
-    {
-      name: 'template-storage'
+interface TemplateStore {
+  templates: Template[];
+  isLoading: boolean;
+  error: string | null;
+  fetchTemplates: () => Promise<void>;
+  addTemplate: (template: Omit<Template, 'id' | 'user_id'>) => Promise<void>;
+  updateTemplate: (id: string, updates: Partial<Template>) => Promise<void>;
+  deleteTemplate: (id: string) => Promise<void>;
+  setDefaultTemplate: (id: string) => Promise<void>;
+}
+
+export const useTemplateStore = create<TemplateStore>()((set) => ({
+  templates: [],
+  isLoading: false,
+  error: null,
+
+  fetchTemplates: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      set({ templates: data || [] });
+    } catch (error) {
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoading: false });
     }
-  )
-);
+  },
+
+  addTemplate: async (template) => {
+    set({ isLoading: true, error: null });
+    try {
+      const user = useAuthStore.getState().user;
+      if (!user) throw new Error('User not authenticated');
+
+      const templateWithMetadata = {
+        ...template,
+        user_id: user.id
+      };
+
+      const { data, error } = await supabase
+        .from('templates')
+        .insert(templateWithMetadata)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        templates: [data, ...state.templates]
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateTemplate: async (id, updates) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .match({ id })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        templates: state.templates.map(template =>
+          template.id === id ? { ...template, ...data } : template
+        )
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteTemplate: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase
+        .from('templates')
+        .delete()
+        .match({ id });
+
+      if (error) throw error;
+
+      set(state => ({
+        templates: state.templates.filter(template => template.id !== id)
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  setDefaultTemplate: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      // First, remove default status from all templates
+      await supabase
+        .from('templates')
+        .update({ is_default: false })
+        .neq('id', id);
+
+      // Then set the new default template
+      const { data, error } = await supabase
+        .from('templates')
+        .update({ is_default: true })
+        .match({ id })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set(state => ({
+        templates: state.templates.map(template => ({
+          ...template,
+          is_default: template.id === id ? data.is_default : false
+        }))
+      }));
+    } catch (error) {
+      set({ error: (error as Error).message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  }
+}));
