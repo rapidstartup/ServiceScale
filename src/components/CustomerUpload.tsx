@@ -11,6 +11,7 @@ import { Customer } from '../store/customerStore';
 import { useTemplateStore } from '../store/templateStore';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
+import { PropertyData } from '../types/attom';
 
 interface CSVRow {
   [key: string]: string | undefined;
@@ -241,7 +242,7 @@ const CustomerUpload: React.FC = () => {
       if (!response.ok) {
         throw new Error(`API returned ${response.status}`);
       }
-      const data = await response.json();
+      const data: PropertyData = await response.json();
       
       // Create output record with separate fields
       const outputRecord = {
@@ -252,12 +253,12 @@ const CustomerUpload: React.FC = () => {
         state: customer.State,
         postalcode: customer.PostalCode,
         combinedaddress: customer.CombinedAddress,
-        propertytype: data.propertyType || '',
-        propertysize: data.propertySize || '',
-        yearbuilt: data.yearBuilt || '',
-        bedrooms: data.bedrooms || 0,
-        bathrooms: data.bathrooms || 0,
-        lotsize: data.lotSize || ''
+        propertytype: data.propertyType,
+        propertysize: data.propertySize,
+        yearbuilt: data.yearBuilt,
+        bedrooms: parseInt(data.bedrooms) || 0,
+        bathrooms: parseInt(data.bathrooms) || 0,
+        lotsize: data.lotSize
       };
 
       const { error } = await supabase

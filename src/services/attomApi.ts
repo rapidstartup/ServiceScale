@@ -1,4 +1,6 @@
-export async function getPropertyData(address: string, city: string, state: string) {
+import { AttomResponse, PropertyData } from '../types/attom';
+
+export async function getPropertyData(address: string, city: string, state: string): Promise<PropertyData> {
   if (!address || !city || !state) {
     throw new Error('Missing required address information');
   }
