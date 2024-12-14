@@ -245,8 +245,7 @@ const CustomerUpload: React.FC = () => {
       console.log('Received property data from ATTOM:', data);
       
       // Update the customer with the new property data in separate fields
-      const updatedCustomer = {
-        ...customer,
+      const updatedCustomer: Partial<Customer> = {
         propertyType: data.propertyType,
         propertySize: data.propertySize,
         yearBuilt: data.yearBuilt,
@@ -256,7 +255,8 @@ const CustomerUpload: React.FC = () => {
       };
       
       // Update the customer in the store first (this will update the UI)
-      updateCustomer(customer.id, updatedCustomer);
+      await updateCustomer(customer.id, updatedCustomer);
+      console.log('Updated customer in store:', updatedCustomer);
 
       // Create output record
       const outputRecord = {
@@ -266,7 +266,7 @@ const CustomerUpload: React.FC = () => {
         city: customer.City,
         state: customer.State,
         postalcode: customer.PostalCode,
-        combinedaddress: customer.CombinedAddress, // Keep original combined address
+        combinedaddress: customer.CombinedAddress,
         property_type: data.propertyType,
         property_size: data.propertySize,
         year_built: data.yearBuilt,
@@ -281,23 +281,24 @@ const CustomerUpload: React.FC = () => {
       try {
         const { error } = await supabase
           .from('output')
-          .insert([outputRecord]);
+          .upsert([outputRecord], { 
+            onConflict: 'customer_id',
+            ignoreDuplicates: false 
+          });
 
         if (error) {
           console.error('Supabase storage error:', error);
-          // Don't throw the error - we've already updated the UI
           toast.error('Failed to save to database, but data is displayed in the table');
         } else {
           console.log('Successfully stored property data in Supabase');
           toast.success('Property data retrieved and saved successfully');
+          // Refresh the outputs after successful save
+          await fetchOutputs();
         }
       } catch (dbError) {
         console.error('Database error:', dbError);
         toast.error('Failed to save to database, but data is displayed in the table');
       }
-
-      // Refresh the data after all operations
-      await fetchOutputs();
 
     } catch (error) {
       console.error('Error in handleGetPropertyData:', error);

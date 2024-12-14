@@ -140,7 +140,7 @@ export const useCustomerStore = create<CustomerStore>()((set) => ({
   updateCustomer: async (id, updates) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('customers')
         .update(updates)
         .match({ id })
@@ -151,7 +151,7 @@ export const useCustomerStore = create<CustomerStore>()((set) => ({
 
       set(state => ({
         customers: state.customers.map(customer =>
-          customer.id === id ? { ...customer, ...data } : customer
+          customer.id === id ? { ...customer, ...updates } : customer
         )
       }));
     } catch (error) {
@@ -212,7 +212,7 @@ export const useCustomerStore = create<CustomerStore>()((set) => ({
     set({ isLoading: true, error: null });
     try {
       const { data, error } = await supabase
-        .from('OUTPUT')
+        .from('output')
         .select('*')
         .order('created_at', { ascending: false });
 
