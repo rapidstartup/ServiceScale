@@ -5,12 +5,11 @@ export async function getPropertyData(address: string, city: string, state: stri
     throw new Error('Missing required address information');
   }
 
-  // Ensure the environment variables are available
-  const attomApiBase = import.meta.env.VITE_ATTOM_API_BASE;
+  const attomApiBase = import.meta.env.VITE_ATTOM_API_BASE_URL;
   const attomApiKey = import.meta.env.VITE_ATTOM_API_KEY;
 
   if (!attomApiBase || !attomApiKey) {
-    throw new Error('Missing ATTOM API configuration in environment variables');
+    throw new Error('Missing ATTOM API configuration');
   }
 
   try {
@@ -20,10 +19,10 @@ export async function getPropertyData(address: string, city: string, state: stri
     const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`); // City and state only
 
     // Log the constructed URL for debugging
-    console.log('Constructed URL:', `${attomApiBase}/propertyapi/v1.0.0/property/buildingpermits?address1=${address1}&address2=${address2}`);
+    console.log('Constructed URL:', `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`);
 
     const response = await fetch(
-      `${attomApiBase}/propertyapi/v1.0.0/property/buildingpermits?address1=${address1}&address2=${address2}`,
+      `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`,
       {
         headers: {
           'Accept': 'application/json',
@@ -55,15 +54,7 @@ export async function getPropertyData(address: string, city: string, state: stri
       yearBuilt: property.summary?.yearBuilt?.toString() || 'Unknown',
       bedrooms: property.building?.rooms?.beds?.toString() || '0',
       bathrooms: property.building?.rooms?.bathsTotal?.toString() || '0',
-      recentPermits: (property.buildingPermits || [])
-        .sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime())
-        .slice(0, 3)
-        .map((permit) => ({
-          date: new Date(permit.effectiveDate).toLocaleDateString(),
-          type: permit.type,
-          description: permit.description || permit.type,
-          value: permit.jobValue || 0,
-        })),
+      recentPermits: []
     };
   } catch (error) {
     console.error('ATTOM API Error:', error);
