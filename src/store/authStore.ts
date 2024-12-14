@@ -1,8 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
-export interface User {
+export interface SupabaseUser extends User {
+  raw_user_meta_data?: {
+    is_admin?: boolean;
+  };
+}
+
+export interface AppUser {
   id: string;
   email: string;
   name: string;
@@ -11,7 +18,7 @@ export interface User {
 
 interface AuthStore {
   isAuthenticated: boolean;
-  user: User | null;
+  user: AppUser | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }

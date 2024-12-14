@@ -238,6 +238,9 @@ const CustomerUpload: React.FC = () => {
     setLoadingPropertyIds(prev => [...prev, customer.id]);
     try {
       const response = await fetch(`/api/property?address1=${encodeURIComponent(customer.Address1)}&address2=${encodeURIComponent(`${customer.City}, ${customer.State}`)}`);
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
       const data = await response.json();
       
       // Create output record with separate fields
@@ -250,7 +253,7 @@ const CustomerUpload: React.FC = () => {
         postalcode: customer.PostalCode,
         combinedaddress: customer.CombinedAddress,
         propertytype: data.propertyType || '',
-        propertysize: data.buildingSize || '',
+        propertysize: data.propertySize || '',
         yearbuilt: data.yearBuilt || '',
         bedrooms: data.bedrooms || 0,
         bathrooms: data.bathrooms || 0,

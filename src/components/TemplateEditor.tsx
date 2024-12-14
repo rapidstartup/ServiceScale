@@ -33,7 +33,7 @@ const DEFAULT_SECTION: Omit<TemplateSection, 'id'> = {
 const TemplateEditor: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const user = useAuthStore(state => state.user);
   const { templates, addTemplate, updateTemplate } = useTemplateStore();
   const [template, setTemplate] = useState<Template | null>(null);
 
