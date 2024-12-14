@@ -52,11 +52,11 @@ export interface QuoteTemplate {
   id: string;
   name: string;
   description: string;
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
+  is_default: boolean;
+  preview_image: string;
   sections: TemplateSection[];
-  previewImage: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TemplateSection {
@@ -70,7 +70,6 @@ export interface TemplateSection {
     backgroundColor?: string;
     textColor?: string;
     layout?: 'left' | 'right' | 'center';
-    [key: string]: any;
   };
 }
 

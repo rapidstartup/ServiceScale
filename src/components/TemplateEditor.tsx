@@ -1,80 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout, Save, ArrowLeft, Plus } from 'lucide-react';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { useTemplateStore } from '../store/templateStore';
-import { QuoteTemplate, TemplateSection } from '../types';
+import { Layout, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useTemplateStore, Template, TemplateSection } from '../store/templateStore';
+import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
-import SortableSection from './editor/SortableSection';
 
-const DEFAULT_NEW_TEMPLATE: QuoteTemplate = {
+const DEFAULT_NEW_TEMPLATE: Template = {
   id: '',
+  user_id: '',
   name: 'New Template',
   description: 'A new quote template',
-  isDefault: false,
-  createdAt: '',
-  updatedAt: '',
-  previewImage: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=600&h=400&fit=crop',
-  sections: []
+  is_default: false,
+  preview_image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=600&h=400&fit=crop',
+  sections: [],
+  created_at: '',
+  updated_at: ''
 };
 
-const getDefaultContent = (type: TemplateSection['type']): string => {
-  switch (type) {
-    case 'header':
-      return '<h1>Welcome to Our Professional Service</h1><p>We are committed to providing top-quality solutions for your needs.</p>';
-    case 'team':
-      return '<h2>Meet Our Expert Team</h2><p>Our experienced professionals are here to serve you.</p>';
-    case 'services':
-      return '<h2>Our Services</h2><ul><li>Professional Installation</li><li>Maintenance</li><li>Repairs</li></ul>';
-    case 'certifications':
-      return '<h2>Our Certifications</h2><p>We maintain the highest industry standards with our certifications.</p>';
-    case 'insurance':
-      return '<h2>Insurance Coverage</h2><p>We are fully insured for your peace of mind.</p>';
-    case 'warranty':
-      return '<h2>Our Warranty</h2><p>We stand behind our work with comprehensive warranty coverage.</p>';
-    case 'reviews':
-      return '<h2>Customer Reviews</h2><p>See what our satisfied customers have to say about our work.</p>';
-    case 'financing':
-      return '<h2>Financing Options</h2><p>Flexible financing solutions to fit your budget.</p>';
-    default:
-      return '<p>Add your content here...</p>';
+const DEFAULT_SECTION: Omit<TemplateSection, 'id'> = {
+  title: 'New Section',
+  content: '<p>Add your content here...</p>',
+  type: 'header',
+  images: [],
+  order: 0,
+  settings: {
+    backgroundColor: '#ffffff',
+    textColor: '#000000',
+    layout: 'left'
   }
 };
 
 const TemplateEditor: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { templates, addTemplate, updateTemplate } = useTemplateStore();
-  const [template, setTemplate] = useState<QuoteTemplate | null>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
+    if (!isAdmin) {
+      navigate('/templates');
+      return;
+    }
+
     if (id === 'new') {
       setTemplate({
         ...DEFAULT_NEW_TEMPLATE,
         id: `template-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        user_id: user?.id || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
     } else {
       const existingTemplate = templates.find(t => t.id === id);
@@ -82,7 +59,7 @@ const TemplateEditor: React.FC = () => {
         setTemplate(existingTemplate);
       }
     }
-  }, [id, templates]);
+  }, [id, templates, isAdmin, navigate]);
 
   const handleSave = () => {
     if (!template) return;
@@ -97,21 +74,13 @@ const TemplateEditor: React.FC = () => {
     navigate('/templates');
   };
 
-  const addSection = (type: TemplateSection['type']) => {
+  const addSection = () => {
     if (!template) return;
 
     const newSection: TemplateSection = {
+      ...DEFAULT_SECTION,
       id: `section-${Date.now()}`,
-      type,
-      title: `New ${type.charAt(0).toUpperCase() + type.slice(1)} Section`,
-      content: getDefaultContent(type),
-      images: [],
-      order: template.sections.length + 1,
-      settings: {
-        backgroundColor: '#ffffff',
-        textColor: '#000000',
-        layout: 'left'
-      }
+      order: template.sections.length
     };
 
     setTemplate({
@@ -140,28 +109,10 @@ const TemplateEditor: React.FC = () => {
     });
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setTemplate((template) => {
-        if (!template) return null;
-
-        const oldIndex = template.sections.findIndex((section) => section.id === active.id);
-        const newIndex = template.sections.findIndex((section) => section.id === over.id);
-
-        return {
-          ...template,
-          sections: arrayMove(template.sections, oldIndex, newIndex),
-        };
-      });
-    }
-  };
-
-  if (!template) {
+  if (!template || !isAdmin) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Template not found</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Template not found or access denied</h2>
       </div>
     );
   }
@@ -183,12 +134,14 @@ const TemplateEditor: React.FC = () => {
               value={template.name}
               onChange={(e) => setTemplate({ ...template, name: e.target.value })}
               className="text-3xl font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+              placeholder="Template Name"
             />
             <input
               type="text"
               value={template.description}
               onChange={(e) => setTemplate({ ...template, description: e.target.value })}
               className="block mt-1 text-sm text-gray-600 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+              placeholder="Template Description"
             />
           </div>
         </div>
@@ -204,41 +157,78 @@ const TemplateEditor: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">Template Sections</h2>
-          <div className="flex space-x-2">
-            {['header', 'team', 'services', 'certifications', 'insurance', 'warranty', 'reviews', 'financing'].map((type) => (
-              <button
-                key={type}
-                onClick={() => addSection(type as TemplateSection['type'])}
-                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md capitalize"
-              >
-                <Plus className="h-4 w-4 inline-block mr-1" />
-                {type}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={addSection}
+            className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Section</span>
+          </button>
         </div>
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={template.sections.map(s => s.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-4">
-              {template.sections.map((section) => (
-                <SortableSection
-                  key={section.id}
-                  section={section}
-                  onUpdate={updateSection}
-                  onDelete={deleteSection}
+        <div className="space-y-4">
+          {template.sections.map((section) => (
+            <div
+              key={section.id}
+              className="border rounded-lg p-4"
+              style={{
+                backgroundColor: section.settings.backgroundColor,
+                color: section.settings.textColor
+              }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <input
+                  type="text"
+                  value={section.title}
+                  onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                  className="text-lg font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                  placeholder="Section Title"
                 />
-              ))}
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => deleteSection(section.id)}
+                    className="p-1 text-gray-500 hover:text-red-500"
+                    title="Delete Section"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <textarea
+                value={section.content}
+                onChange={(e) => updateSection(section.id, { content: e.target.value })}
+                className="w-full min-h-[100px] bg-transparent border rounded-lg p-2 focus:outline-none focus:border-blue-500"
+                placeholder="Section Content (HTML supported)"
+              />
+
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Background Color</label>
+                  <input
+                    type="color"
+                    value={section.settings.backgroundColor}
+                    onChange={(e) => updateSection(section.id, {
+                      settings: { ...section.settings, backgroundColor: e.target.value }
+                    })}
+                    className="w-full h-8 rounded"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Text Color</label>
+                  <input
+                    type="color"
+                    value={section.settings.textColor}
+                    onChange={(e) => updateSection(section.id, {
+                      settings: { ...section.settings, textColor: e.target.value }
+                    })}
+                    className="w-full h-8 rounded"
+                  />
+                </div>
+              </div>
             </div>
-          </SortableContext>
-        </DndContext>
+          ))}
+        </div>
       </div>
     </div>
   );
