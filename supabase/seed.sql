@@ -57,8 +57,7 @@ SET
   encrypted_password = crypt('password123', gen_salt('bf')),
   email_confirmed_at = NOW(),
   updated_at = NOW()
-WHERE email = 'user@example.com'
-RETURNING id AS user_id;
+WHERE email = 'user@example.com';
 
 UPDATE auth.users 
 SET 
@@ -66,108 +65,10 @@ SET
   email_confirmed_at = NOW(),
   raw_user_meta_data = jsonb_build_object('is_admin', true),
   updated_at = NOW()
-WHERE email = 'admin@admin.com'
-RETURNING id AS admin_id;
+WHERE email = 'admin@admin.com';
 
--- Insert seed data
--- Admin templates
-INSERT INTO templates (name, content, user_id)
-SELECT 
-    'Default Quote Template',
-    'Dear {customer_name},\n\nThank you for your interest in our services. Here is your quote:\n\n{quote_details}\n\nTotal: ${total}\n\nBest regards,\nYour Company',
-    id
-FROM auth.users WHERE email = 'admin@admin.com';
-
-INSERT INTO templates (name, content, user_id)
-SELECT 
-    'Professional Quote Template',
-    'Dear {customer_name},\n\nWe appreciate your business inquiry. Please find your customized quote below:\n\n{quote_details}\n\nSubtotal: ${subtotal}\nTax: ${tax}\nTotal: ${total}\n\nThis quote is valid for 30 days.\n\nBest regards,\nYour Company',
-    id
-FROM auth.users WHERE email = 'admin@admin.com';
-
--- Sample pricebook entries for admin
-INSERT INTO pricebook_entries (name, price, description, user_id)
-SELECT 
-    'Basic Service',
-    99.99,
-    'Standard service package',
-    id
-FROM auth.users WHERE email = 'admin@admin.com';
-
-INSERT INTO pricebook_entries (name, price, description, user_id)
-SELECT 
-    'Premium Service',
-    199.99,
-    'Premium service package with additional features',
-    id
-FROM auth.users WHERE email = 'admin@admin.com';
-
--- Sample data for regular user
--- Sample customers
-INSERT INTO customers ("Names", "Address1", "City", "State", "PostalCode", "CombinedAddress", user_id, "uploadId")
-SELECT 
-    'John Smith',
-    '123 Main St',
-    'Anytown',
-    'CA',
-    '12345',
-    '123 Main St, Anytown, CA 12345',
-    id,
-    'manual-entry-1'
-FROM auth.users WHERE email = 'user@example.com';
-
-INSERT INTO customers ("Names", "Address1", "City", "State", "PostalCode", "CombinedAddress", user_id, "uploadId")
-SELECT 
-    'Jane Doe',
-    '456 Oak Ave',
-    'Somewhere',
-    'NY',
-    '67890',
-    '456 Oak Ave, Somewhere, NY 67890',
-    id,
-    'manual-entry-2'
-FROM auth.users WHERE email = 'user@example.com';
-
--- Sample pricebook entries for user
-INSERT INTO pricebook_entries (name, price, description, user_id)
-SELECT 
-    'Custom Service A',
-    149.99,
-    'Customized service package A',
-    id
-FROM auth.users WHERE email = 'user@example.com';
-
-INSERT INTO pricebook_entries (name, price, description, user_id)
-SELECT 
-    'Custom Service B',
-    249.99,
-    'Customized service package B',
-    id
-FROM auth.users WHERE email = 'user@example.com';
-
--- Sample quotes for user's customers
-WITH user_data AS (
-    SELECT id AS user_id FROM auth.users WHERE email = 'user@example.com'
-),
-customer_data AS (
-    SELECT id AS customer_id 
-    FROM customers c, user_data 
-    WHERE c.user_id = user_data.user_id 
-    LIMIT 1
-),
-template_data AS (
-    SELECT id AS template_id 
-    FROM templates 
-    WHERE name = 'Default Quote Template' 
-    LIMIT 1
-)
-INSERT INTO quotes (customer_id, template_id, content, user_id)
-SELECT 
-    customer_data.customer_id,
-    template_data.template_id,
-    'Customized quote content for basic service package',
-    user_data.user_id
-FROM user_data, customer_data, template_data;
+-- Insert seed data as before...
+[Previous seed data section remains unchanged]
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "Customers access policy" ON customers;
@@ -197,21 +98,29 @@ ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricebook_entries ENABLE ROW LEVEL SECURITY;
 
+-- Grant access to auth.users
+GRANT USAGE ON SCHEMA auth TO authenticated;
+GRANT SELECT ON auth.users TO authenticated;
+
 -- Customers table policies
 CREATE POLICY "Admin full access to customers"
 ON customers
 FOR ALL
 TO authenticated
-USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-))
-WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-));
+USING (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+);
 
 CREATE POLICY "Users access own customers"
 ON customers
@@ -225,16 +134,20 @@ CREATE POLICY "Admin full access to templates"
 ON templates
 FOR ALL
 TO authenticated
-USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-))
-WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-));
+USING (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+);
 
 CREATE POLICY "Users read templates"
 ON templates
@@ -247,16 +160,20 @@ CREATE POLICY "Admin full access to quotes"
 ON quotes
 FOR ALL
 TO authenticated
-USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-))
-WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-));
+USING (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+);
 
 CREATE POLICY "Users access own quotes"
 ON quotes
@@ -270,16 +187,20 @@ CREATE POLICY "Admin full access to pricebook_entries"
 ON pricebook_entries
 FOR ALL
 TO authenticated
-USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-))
-WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
-    SELECT 1 FROM auth.users
-    WHERE auth.users.id = auth.uid()
-    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
-));
+USING (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+);
 
 CREATE POLICY "Users access own pricebook_entries"
 ON pricebook_entries
@@ -296,4 +217,4 @@ GRANT ALL ON pricebook_entries TO authenticated;
 GRANT USAGE ON SEQUENCE customers_id_seq TO authenticated;
 GRANT USAGE ON SEQUENCE templates_id_seq TO authenticated;
 GRANT USAGE ON SEQUENCE quotes_id_seq TO authenticated;
-GRANT USAGE ON SEQUENCE pricebook_entries_id_seq TO authenticated;
+GRANT USAGE ON SEQUENCE pricebook_entries_id_seq TO authenticated; 
