@@ -101,29 +101,35 @@ const Dashboard = () => {
     
     // Add quote activity
     quotes.forEach(quote => {
-      activity.push({
-        action: `Quote #${quote.id.slice(0, 7)} ${quote.status}`,
-        time: new Date(quote.created_at || ''),
-        timestamp: new Date(quote.created_at || '').getTime()
-      });
+      if (quote.created_at) {
+        activity.push({
+          action: `Quote #${quote.id.slice(0, 7)} ${quote.status}`,
+          time: new Date(quote.created_at),
+          timestamp: new Date(quote.created_at).getTime()
+        });
+      }
     });
 
     // Add customer activity
     customers.forEach(customer => {
-      activity.push({
-        action: `Customer ${customer.name} added`,
-        time: new Date(customer.created_at || ''),
-        timestamp: new Date(customer.created_at || '').getTime()
-      });
+      if (customer.created_at && customer.name) {
+        activity.push({
+          action: `Customer ${customer.name} added`,
+          time: new Date(customer.created_at),
+          timestamp: new Date(customer.created_at).getTime()
+        });
+      }
     });
 
     // Add product activity
     products.forEach(product => {
-      activity.push({
-        action: `Product ${product.name} added`,
-        time: new Date(product.created_at || ''),
-        timestamp: new Date(product.created_at || '').getTime()
-      });
+      if (product.created_at && product.name) {
+        activity.push({
+          action: `Product ${product.name} added`,
+          time: new Date(product.created_at),
+          timestamp: new Date(product.created_at).getTime()
+        });
+      }
     });
 
     return activity
