@@ -5,11 +5,10 @@ export async function getPropertyData(address: string, city: string, state: stri
     throw new Error('Missing required address information');
   }
 
-  // Ensure the environment variables are available
-  const attomApiBase = import.meta.env.VITE_ATTOM_API_BASE;
+  const attomApiBase = 'https://api.gateway.attomdata.com';
   const attomApiKey = import.meta.env.VITE_ATTOM_API_KEY;
 
-  if (!attomApiBase || !attomApiKey) {
+  if (!attomApiKey) {
     throw new Error('Missing ATTOM API configuration');
   }
 
@@ -19,15 +18,15 @@ export async function getPropertyData(address: string, city: string, state: stri
     const address1 = encodeURIComponent(cleanAddress); // Street address only
     const address2 = encodeURIComponent(`${city.trim()}, ${state.trim()}`); // City and state only
 
-    const response = await fetch(
-      `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`,
-      {
-        headers: {
-          'Accept': 'application/json',
-          'apikey': attomApiKey,
-        },
-      }
-    );
+    const url = `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`;
+    console.log('ATTOM API URL:', url);
+
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'apikey': attomApiKey,
+      },
+    });
 
     if (!response.ok) {
       throw new Error(`ATTOM API error: ${response.status} ${response.statusText}`);
