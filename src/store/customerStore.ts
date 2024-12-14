@@ -13,6 +13,8 @@ export interface Customer {
   yearBuilt: string;
   uploadId?: string;
   deleted?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface CustomerStore {
