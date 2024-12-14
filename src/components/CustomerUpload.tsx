@@ -253,12 +253,17 @@ const CustomerUpload: React.FC = () => {
         bathrooms: data.bathrooms,
         lotSize: data.lotSize
       };
-      
-      // Update the customer in the store first (this will update the UI)
-      await updateCustomer(customer.id, updatedCustomer);
-      console.log('Updated customer in store:', updatedCustomer);
 
-      // Create output record
+      // Update the local state immediately using the store's update function
+      useCustomerStore.setState(state => ({
+        customers: state.customers.map(c =>
+          c.id === customer.id ? { ...c, ...updatedCustomer } : c
+        )
+      }));
+      
+      console.log('Updated customer in UI:', updatedCustomer);
+
+      // Create output record for database
       const outputRecord = {
         customer_id: customer.id,
         names: customer.Names,
