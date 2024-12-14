@@ -1,13 +1,64 @@
 -- Enable the crypto extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- Drop existing tables if they exist
+DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS quotes CASCADE;
+DROP TABLE IF EXISTS templates CASCADE;
+DROP TABLE IF EXISTS pricebook_entries CASCADE;
+
+-- Create tables with correct columns
+CREATE TABLE customers (
+    id BIGSERIAL PRIMARY KEY,
+    "Names" TEXT,
+    "Address1" TEXT,
+    "City" TEXT,
+    "State" TEXT,
+    "PostalCode" TEXT,
+    "CombinedAddress" TEXT,
+    user_id UUID REFERENCES auth.users(id),
+    "uploadId" TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE templates (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    content TEXT,
+    user_id UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE quotes (
+    id BIGSERIAL PRIMARY KEY,
+    customer_id BIGINT REFERENCES customers(id),
+    template_id BIGINT REFERENCES templates(id),
+    content TEXT,
+    user_id UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE pricebook_entries (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    price DECIMAL(10,2),
+    description TEXT,
+    user_id UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Update existing users to confirm emails and reset passwords
 UPDATE auth.users 
 SET 
   encrypted_password = crypt('password123', gen_salt('bf')),
   email_confirmed_at = NOW(),
   updated_at = NOW()
-WHERE email = 'user@example.com';
+WHERE email = 'user@example.com'
+RETURNING id AS user_id;
 
 UPDATE auth.users 
 SET 
@@ -15,231 +66,234 @@ SET
   email_confirmed_at = NOW(),
   raw_user_meta_data = jsonb_build_object('is_admin', true),
   updated_at = NOW()
-WHERE email = 'admin@admin.com';
+WHERE email = 'admin@admin.com'
+RETURNING id AS admin_id;
 
--- Drop all existing policies
-DROP POLICY IF EXISTS "Enable read for admins" ON public.customers;
-DROP POLICY IF EXISTS "Enable read for user's own data" ON public.customers;
-DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.customers;
-DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.customers;
-DROP POLICY IF EXISTS "Enable access for admins and own data for users" ON public.customers;
-DROP POLICY IF EXISTS "Customers access policy" ON public.customers;
+-- Insert seed data
+-- Admin templates
+INSERT INTO templates (name, content, user_id)
+SELECT 
+    'Default Quote Template',
+    'Dear {customer_name},\n\nThank you for your interest in our services. Here is your quote:\n\n{quote_details}\n\nTotal: ${total}\n\nBest regards,\nYour Company',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
 
--- Simplified customer policies
-CREATE POLICY "Customers access policy"
-  ON public.customers
-  FOR ALL
-  TO authenticated
-  USING (
-    CASE 
-      WHEN EXISTS (
-        SELECT 1 
-        FROM auth.users 
-        WHERE id = auth.uid() 
-        AND raw_user_meta_data->>'is_admin' = 'true'
-      ) THEN true
-      ELSE auth.uid() = user_id
-    END
-  )
-  WITH CHECK (
-    CASE 
-      WHEN EXISTS (
-        SELECT 1 
-        FROM auth.users 
-        WHERE id = auth.uid() 
-        AND raw_user_meta_data->>'is_admin' = 'true'
-      ) THEN true
-      ELSE auth.uid() = user_id
-    END
-  );
+INSERT INTO templates (name, content, user_id)
+SELECT 
+    'Professional Quote Template',
+    'Dear {customer_name},\n\nWe appreciate your business inquiry. Please find your customized quote below:\n\n{quote_details}\n\nSubtotal: ${subtotal}\nTax: ${tax}\nTotal: ${total}\n\nThis quote is valid for 30 days.\n\nBest regards,\nYour Company',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
 
--- Drop pricebook policies
-DROP POLICY IF EXISTS "Enable read for admins" ON public.pricebook_entries;
-DROP POLICY IF EXISTS "Enable read for user's own data" ON public.pricebook_entries;
-DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.pricebook_entries;
-DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.pricebook_entries;
+-- Sample pricebook entries for admin
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Basic Service',
+    99.99,
+    'Standard service package',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
 
--- Pricebook policies
-CREATE POLICY "Enable read for admins"
-  ON public.pricebook_entries
-  FOR SELECT
-  TO authenticated
-  USING (auth.is_admin());
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Premium Service',
+    199.99,
+    'Premium service package with additional features',
+    id
+FROM auth.users WHERE email = 'admin@admin.com';
 
-CREATE POLICY "Enable read for user's own data"
-  ON public.pricebook_entries
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
+-- Sample data for regular user
+-- Sample customers
+INSERT INTO customers ("Names", "Address1", "City", "State", "PostalCode", "CombinedAddress", user_id, "uploadId")
+SELECT 
+    'John Smith',
+    '123 Main St',
+    'Anytown',
+    'CA',
+    '12345',
+    '123 Main St, Anytown, CA 12345',
+    id,
+    'manual-entry-1'
+FROM auth.users WHERE email = 'user@example.com';
 
-CREATE POLICY "Enable insert for user's own data"
-  ON public.pricebook_entries
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+INSERT INTO customers ("Names", "Address1", "City", "State", "PostalCode", "CombinedAddress", user_id, "uploadId")
+SELECT 
+    'Jane Doe',
+    '456 Oak Ave',
+    'Somewhere',
+    'NY',
+    '67890',
+    '456 Oak Ave, Somewhere, NY 67890',
+    id,
+    'manual-entry-2'
+FROM auth.users WHERE email = 'user@example.com';
 
-CREATE POLICY "Enable update for admins or own data"
-  ON public.pricebook_entries
-  FOR UPDATE
-  TO authenticated
-  USING (auth.is_admin() OR auth.uid() = user_id);
+-- Sample pricebook entries for user
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Custom Service A',
+    149.99,
+    'Customized service package A',
+    id
+FROM auth.users WHERE email = 'user@example.com';
 
--- Templates policies (updated)
-DROP POLICY IF EXISTS "Enable read for admins" ON public.templates;
-DROP POLICY IF EXISTS "Enable read for user's own data" ON public.templates;
-DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.templates;
-DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.templates;
-DROP POLICY IF EXISTS "Enable read for all users" ON public.templates;
-DROP POLICY IF EXISTS "Enable insert for admins only" ON public.templates;
-DROP POLICY IF EXISTS "Enable update for admins only" ON public.templates;
-DROP POLICY IF EXISTS "Enable delete for admins only" ON public.templates;
+INSERT INTO pricebook_entries (name, price, description, user_id)
+SELECT 
+    'Custom Service B',
+    249.99,
+    'Customized service package B',
+    id
+FROM auth.users WHERE email = 'user@example.com';
 
--- New template policies
-CREATE POLICY "Enable read for all users"
-  ON public.templates
-  FOR SELECT
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Enable insert for admins only"
-  ON public.templates
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.is_admin());
-
-CREATE POLICY "Enable update for admins only"
-  ON public.templates
-  FOR UPDATE
-  TO authenticated
-  USING (auth.is_admin());
-
-CREATE POLICY "Enable delete for admins only"
-  ON public.templates
-  FOR DELETE
-  TO authenticated
-  USING (auth.is_admin());
-
--- Add back the default template
-INSERT INTO public.templates (id, name, description, is_default, sections, user_id)
-VALUES (
-  'b98e7c00-2e9b-4a7b-9436-3b126ffa4983',
-  'Default Template',
-  'Standard template for HVAC quotes',
-  true,
-  '[
-    {
-      "title": "Project Overview",
-      "content": "This proposal outlines the HVAC installation project for your property."
-    },
-    {
-      "title": "Scope of Work",
-      "content": "Our team will perform the following services:"
-    },
-    {
-      "title": "Equipment Details",
-      "content": "We will install the following equipment:"
-    },
-    {
-      "title": "Project Timeline",
-      "content": "The project will be completed within the following timeframe:"
-    },
-    {
-      "title": "Warranty Information",
-      "content": "All equipment and labor come with the following warranties:"
-    },
-    {
-      "title": "Terms & Conditions",
-      "content": "Please review our standard terms and conditions:"
-    }
-  ]'::jsonb,
-  (SELECT id FROM auth.users WHERE email = 'admin@admin.com')
+-- Sample quotes for user's customers
+WITH user_data AS (
+    SELECT id AS user_id FROM auth.users WHERE email = 'user@example.com'
+),
+customer_data AS (
+    SELECT id AS customer_id 
+    FROM customers c, user_data 
+    WHERE c.user_id = user_data.user_id 
+    LIMIT 1
+),
+template_data AS (
+    SELECT id AS template_id 
+    FROM templates 
+    WHERE name = 'Default Quote Template' 
+    LIMIT 1
 )
-ON CONFLICT (id) DO UPDATE
-SET 
-  name = EXCLUDED.name,
-  description = EXCLUDED.description,
-  is_default = EXCLUDED.is_default,
-  sections = EXCLUDED.sections;
+INSERT INTO quotes (customer_id, template_id, content, user_id)
+SELECT 
+    customer_data.customer_id,
+    template_data.template_id,
+    'Customized quote content for basic service package',
+    user_data.user_id
+FROM user_data, customer_data, template_data;
 
--- Drop quotes policies
-DROP POLICY IF EXISTS "Enable read for admins" ON public.quotes;
-DROP POLICY IF EXISTS "Enable read for user's own data" ON public.quotes;
-DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.quotes;
-DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.quotes;
+-- Drop existing policies
+DROP POLICY IF EXISTS "Customers access policy" ON customers;
+DROP POLICY IF EXISTS "Enable read for admins" ON customers;
+DROP POLICY IF EXISTS "Enable read for user's own data" ON customers;
+DROP POLICY IF EXISTS "Enable insert for user's own data" ON customers;
+DROP POLICY IF EXISTS "Enable update for admins or own data" ON customers;
 
--- Quotes policies
-CREATE POLICY "Enable read for admins"
-  ON public.quotes
-  FOR SELECT
-  TO authenticated
-  USING (auth.is_admin());
+DROP POLICY IF EXISTS "Enable read for all users" ON templates;
+DROP POLICY IF EXISTS "Enable insert for admins only" ON templates;
+DROP POLICY IF EXISTS "Enable update for admins only" ON templates;
+DROP POLICY IF EXISTS "Enable delete for admins only" ON templates;
 
-CREATE POLICY "Enable read for user's own data"
-  ON public.quotes
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Enable read for admins" ON quotes;
+DROP POLICY IF EXISTS "Enable read for user's own data" ON quotes;
+DROP POLICY IF EXISTS "Enable insert for user's own data" ON quotes;
+DROP POLICY IF EXISTS "Enable update for admins or own data" ON quotes;
 
-CREATE POLICY "Enable insert for user's own data"
-  ON public.quotes
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Enable read for admins" ON pricebook_entries;
+DROP POLICY IF EXISTS "Enable read for user's own data" ON pricebook_entries;
+DROP POLICY IF EXISTS "Enable insert for user's own data" ON pricebook_entries;
+DROP POLICY IF EXISTS "Enable update for admins or own data" ON pricebook_entries;
 
-CREATE POLICY "Enable update for admins or own data"
-  ON public.quotes
-  FOR UPDATE
-  TO authenticated
-  USING (auth.is_admin() OR auth.uid() = user_id);
+-- Enable Row Level Security
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pricebook_entries ENABLE ROW LEVEL SECURITY;
 
--- Drop settings policies
-DROP POLICY IF EXISTS "Enable read for admins" ON public.settings;
-DROP POLICY IF EXISTS "Enable read for user's own data" ON public.settings;
-DROP POLICY IF EXISTS "Enable insert for user's own data" ON public.settings;
-DROP POLICY IF EXISTS "Enable update for admins or own data" ON public.settings;
+-- Customers table policies
+CREATE POLICY "Admin full access to customers"
+ON customers
+FOR ALL
+TO authenticated
+USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+))
+WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+));
 
--- Settings policies
-CREATE POLICY "Enable read for admins"
-  ON public.settings
-  FOR SELECT
-  TO authenticated
-  USING (auth.is_admin());
+CREATE POLICY "Users access own customers"
+ON customers
+FOR ALL
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Enable read for user's own data"
-  ON public.settings
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
+-- Templates table policies
+CREATE POLICY "Admin full access to templates"
+ON templates
+FOR ALL
+TO authenticated
+USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+))
+WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+));
 
-CREATE POLICY "Enable insert for user's own data"
-  ON public.settings
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users read templates"
+ON templates
+FOR SELECT
+TO authenticated
+USING (true);
 
-CREATE POLICY "Enable update for admins or own data"
-  ON public.settings
-  FOR UPDATE
-  TO authenticated
-  USING (auth.is_admin() OR auth.uid() = user_id);
+-- Quotes table policies
+CREATE POLICY "Admin full access to quotes"
+ON quotes
+FOR ALL
+TO authenticated
+USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+))
+WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+));
 
--- Enable RLS on all tables
-ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pricebook_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.quotes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.templates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users access own quotes"
+ON quotes
+FOR ALL
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
--- Create admin check function
-CREATE OR REPLACE FUNCTION auth.is_admin()
-RETURNS boolean AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 
-    FROM auth.users 
-    WHERE id = auth.uid() 
-    AND raw_user_meta_data->>'is_admin' = 'true'
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-  
+-- Pricebook entries table policies
+CREATE POLICY "Admin full access to pricebook_entries"
+ON pricebook_entries
+FOR ALL
+TO authenticated
+USING (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+))
+WITH CHECK (auth.jwt() ->> 'role' = 'authenticated' AND EXISTS (
+    SELECT 1 FROM auth.users
+    WHERE auth.users.id = auth.uid()
+    AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+));
+
+CREATE POLICY "Users access own pricebook_entries"
+ON pricebook_entries
+FOR ALL
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- Grant necessary permissions
+GRANT ALL ON customers TO authenticated;
+GRANT ALL ON templates TO authenticated;
+GRANT ALL ON quotes TO authenticated;
+GRANT ALL ON pricebook_entries TO authenticated;
+GRANT USAGE ON SEQUENCE customers_id_seq TO authenticated;
+GRANT USAGE ON SEQUENCE templates_id_seq TO authenticated;
+GRANT USAGE ON SEQUENCE quotes_id_seq TO authenticated;
+GRANT USAGE ON SEQUENCE pricebook_entries_id_seq TO authenticated;
