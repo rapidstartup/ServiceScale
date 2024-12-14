@@ -112,9 +112,9 @@ const Dashboard = () => {
 
     // Add customer activity
     customers.forEach(customer => {
-      if (customer.created_at && customer.name) {
+      if (customer.created_at && customer.Names) {
         activity.push({
-          action: `Customer ${customer.name} added`,
+          action: `Customer ${customer.Names} added`,
           time: new Date(customer.created_at),
           timestamp: new Date(customer.created_at).getTime()
         });

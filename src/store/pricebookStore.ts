@@ -20,7 +20,7 @@ interface PricebookStore {
   isLoading: boolean;
   error: string | null;
   fetchEntries: () => Promise<void>;
-  addEntries: (entries: Omit<PricebookEntry, 'id' | 'user_id'>[], uploadId: string) => Promise<void>;
+  addEntries: (entries: Partial<PricebookEntry>[], uploadId: string) => Promise<void>;
   removeEntriesByUploadId: (uploadId: string) => Promise<void>;
   setSelectedUploadId: (uploadId: string | null) => void;
   updateEntry: (id: string, updates: Partial<PricebookEntry>) => Promise<void>;
@@ -59,9 +59,12 @@ export const usePricebookStore = create<PricebookStore>()((set) => ({
       if (!user) throw new Error('User not authenticated');
 
       const entriesWithMetadata = entries.map(entry => ({
-        ...entry,
+        name: entry.name,
+        price: entry.price,
+        description: entry.description,
         user_id: user.id,
-        upload_id: uploadId
+        upload_id: uploadId,
+        ...((entry.id && { id: entry.id }) || {})
       }));
 
       const { data, error } = await supabase

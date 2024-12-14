@@ -76,21 +76,26 @@ const PricebookUpload: React.FC = () => {
     }
   };
 
-  const handleCreateItem = () => {
-    const item = {
-      ...newItem,
-      id: `manual-${Date.now()}`,
-      upload_id: 'manual'
-    };
+  const handleCreateItem = async () => {
+    try {
+      const item = {
+        name: newItem.name,
+        price: newItem.price,
+        description: newItem.description
+      };
 
-    addEntries([item], 'manual');
-    setShowNewItemModal(false);
-    setNewItem({
-      name: '',
-      price: 0,
-      description: ''
-    });
-    toast.success('Item created successfully');
+      await addEntries([item], 'manual');
+      setShowNewItemModal(false);
+      setNewItem({
+        name: '',
+        price: 0,
+        description: ''
+      });
+      toast.success('Item created successfully');
+    } catch (error) {
+      console.error('Failed to create item:', error);
+      toast.error('Failed to create item');
+    }
   };
 
   const handleDeleteUpload = (uploadId: string) => {
