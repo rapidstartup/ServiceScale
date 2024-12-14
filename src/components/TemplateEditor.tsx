@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
-import { useTemplateStore, Template, TemplateSection } from '../store/templateStore';
+import { useTemplateStore, QuoteTemplate, TemplateSection } from '../store/templateStore';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 
-const DEFAULT_NEW_TEMPLATE: Template = {
+const DEFAULT_NEW_TEMPLATE: QuoteTemplate = {
   id: '',
   user_id: '',
   name: 'New Template',
-  description: 'A new quote template',
-  is_default: false,
+  content: 'Add your template content here...',
   preview_image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=600&h=400&fit=crop',
   sections: [],
+  is_default: false,
   created_at: '',
   updated_at: ''
 };
@@ -35,7 +35,7 @@ const TemplateEditor: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const { templates, addTemplate, updateTemplate } = useTemplateStore();
-  const [template, setTemplate] = useState<Template | null>(null);
+  const [template, setTemplate] = useState<QuoteTemplate | null>(null);
 
   const isAdmin = user?.role === 'admin';
 
@@ -147,13 +147,6 @@ const TemplateEditor: React.FC = () => {
               onChange={(e) => setTemplate({ ...template, name: e.target.value })}
               className="text-3xl font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
               placeholder="Template Name"
-            />
-            <input
-              type="text"
-              value={template.description}
-              onChange={(e) => setTemplate({ ...template, description: e.target.value })}
-              className="block mt-1 text-sm text-gray-600 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
-              placeholder="Template Description"
             />
           </div>
         </div>

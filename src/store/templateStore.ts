@@ -4,43 +4,43 @@ import { useAuthStore } from './authStore';
 
 export interface TemplateSection {
   id: string;
-  type: 'header' | 'team' | 'content';
+  type: 'header' | 'content' | 'team' | 'services' | 'certifications' | 'insurance' | 'warranty' | 'reviews' | 'financing';
   title: string;
   content: string;
-  order: number;
-  images?: {
+  images: Array<{
     id: string;
     url: string;
     alt: string;
     width: number;
     height: number;
-  }[];
+  }>;
+  order: number;
   settings: {
-    backgroundColor?: string;
-    textColor?: string;
-    layout?: 'left' | 'center' | 'right';
+    backgroundColor: string;
+    textColor: string;
+    layout: 'left' | 'right' | 'center';
   };
 }
 
-export interface Template {
+export interface QuoteTemplate {
   id: string;
   user_id: string;
   name: string;
-  description: string;
-  is_default: boolean;
+  content: string;
   preview_image: string;
   sections: TemplateSection[];
-  created_at?: string;
-  updated_at?: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface TemplateStore {
-  templates: Template[];
+  templates: QuoteTemplate[];
   isLoading: boolean;
   error: string | null;
   fetchTemplates: () => Promise<void>;
-  addTemplate: (template: Omit<Template, 'id' | 'user_id'>) => Promise<void>;
-  updateTemplate: (id: string, updates: Partial<Template>) => Promise<void>;
+  addTemplate: (template: Omit<QuoteTemplate, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  updateTemplate: (id: string, template: Partial<QuoteTemplate>) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
   setDefaultTemplate: (id: string) => Promise<void>;
 }
@@ -62,7 +62,7 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
 
       set({ templates: data || [] });
     } catch (error) {
-      set({ error: (error as Error).message });
+      set({ error: error instanceof Error ? error.message : 'An error occurred' });
     } finally {
       set({ isLoading: false });
     }
@@ -71,17 +71,12 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
   addTemplate: async (template) => {
     set({ isLoading: true, error: null });
     try {
-      const user = useAuthStore.getState().user;
-      if (!user) throw new Error('User not authenticated');
-
-      const templateWithMetadata = {
-        ...template,
-        user_id: user.id
-      };
-
       const { data, error } = await supabase
         .from('templates')
-        .insert(templateWithMetadata)
+        .insert([{
+          ...template,
+          user_id: useAuthStore.getState().user?.id
+        }])
         .select()
         .single();
 
@@ -91,7 +86,7 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
         templates: [data, ...state.templates]
       }));
     } catch (error) {
-      set({ error: (error as Error).message });
+      set({ error: error instanceof Error ? error.message : 'An error occurred' });
       throw error;
     } finally {
       set({ isLoading: false });
@@ -103,7 +98,7 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
     try {
       const { data, error } = await supabase
         .from('templates')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update(updates)
         .match({ id })
         .select()
         .single();
@@ -116,7 +111,7 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
         )
       }));
     } catch (error) {
-      set({ error: (error as Error).message });
+      set({ error: error instanceof Error ? error.message : 'An error occurred' });
       throw error;
     } finally {
       set({ isLoading: false });
@@ -137,7 +132,7 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
         templates: state.templates.filter(template => template.id !== id)
       }));
     } catch (error) {
-      set({ error: (error as Error).message });
+      set({ error: error instanceof Error ? error.message : 'An error occurred' });
       throw error;
     } finally {
       set({ isLoading: false });
@@ -154,23 +149,21 @@ export const useTemplateStore = create<TemplateStore>()((set) => ({
         .neq('id', id);
 
       // Then set the new default template
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('templates')
         .update({ is_default: true })
-        .match({ id })
-        .select()
-        .single();
+        .match({ id });
 
       if (error) throw error;
 
       set(state => ({
         templates: state.templates.map(template => ({
           ...template,
-          is_default: template.id === id ? data.is_default : false
+          is_default: template.id === id
         }))
       }));
     } catch (error) {
-      set({ error: (error as Error).message });
+      set({ error: error instanceof Error ? error.message : 'An error occurred' });
       throw error;
     } finally {
       set({ isLoading: false });
