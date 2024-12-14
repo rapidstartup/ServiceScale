@@ -244,7 +244,16 @@ const CustomerUpload: React.FC = () => {
       const data = await getPropertyData(customer.Address1, customer.City, customer.State);
       console.log('Received property data from ATTOM:', data);
       
-      // Create output record with separate fields
+      // Update the customer's CombinedAddress with the new property data
+      const updatedCombinedAddress = `${customer.CombinedAddress} | ${data.propertyType} | ${data.propertySize} | Built: ${data.yearBuilt} | ${data.bedrooms} bed | ${data.bathrooms} bath | Lot: ${data.lotSize}`;
+      
+      // Update the customer in the store first (this will update the UI)
+      updateCustomer(customer.id, {
+        ...customer,
+        CombinedAddress: updatedCombinedAddress
+      });
+
+      // Create output record
       const outputRecord = {
         customer_id: customer.id,
         names: customer.Names,
@@ -252,7 +261,7 @@ const CustomerUpload: React.FC = () => {
         city: customer.City,
         state: customer.State,
         postalcode: customer.PostalCode,
-        combinedaddress: customer.CombinedAddress,
+        combinedaddress: updatedCombinedAddress,
         propertytype: data.propertyType,
         propertysize: data.propertySize,
         yearbuilt: data.yearBuilt,
@@ -261,23 +270,29 @@ const CustomerUpload: React.FC = () => {
         lotsize: data.lotSize
       };
 
-      console.log('Storing property data in Supabase:', outputRecord);
+      console.log('Attempting to store property data in Supabase:', outputRecord);
       
-      // Then, store in Supabase
-      const { error } = await supabase
-        .from('OUTPUT')
-        .insert([outputRecord]);
+      // Then, try to store in Supabase
+      try {
+        const { error } = await supabase
+          .from('OUTPUT')
+          .insert([outputRecord]);
 
-      if (error) {
-        console.error('Supabase storage error:', error);
-        throw error;
+        if (error) {
+          console.error('Supabase storage error:', error);
+          // Don't throw the error - we've already updated the UI
+          toast.error('Failed to save to database, but data is displayed in the table');
+        } else {
+          console.log('Successfully stored property data in Supabase');
+          toast.success('Property data retrieved and saved successfully');
+        }
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        toast.error('Failed to save to database, but data is displayed in the table');
       }
 
-      console.log('Successfully stored property data in Supabase');
-
-      // Refresh the data after insert
+      // Refresh the data after all operations
       await fetchOutputs();
-      toast.success('Property data retrieved and stored successfully');
 
     } catch (error) {
       console.error('Error in handleGetPropertyData:', error);
