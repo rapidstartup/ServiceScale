@@ -1,25 +1,24 @@
 import React, { useState, useMemo } from 'react';
 import { parse } from 'papaparse';
-import { BookOpen, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import FileDropzone from './shared/FileDropzone';
 import DataTable from './shared/DataTable';
-import { usePricebookStore } from '../store/pricebookStore';
+import { PricebookEntry, usePricebookStore } from '../store/pricebookStore';
 
 const PricebookUpload: React.FC = () => {
   const { entries, addEntries, removeEntriesByUploadId, updateEntry, deleteEntry, undeleteEntry } = usePricebookStore();
   const [isUploadOpen, setIsUploadOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
-  const [showEditModal, setShowEditModal] = useState<any | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState<any | null>(null);
+  const [showEditModal, setShowEditModal] = useState<PricebookEntry | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState<PricebookEntry | null>(null);
   const [showNewItemModal, setShowNewItemModal] = useState(false);
+  const [showDeleteUploadModal, setShowDeleteUploadModal] = useState<string | null>(null);
   const [newItem, setNewItem] = useState({
-    sku: '',
     name: '',
-    category: '',
     price: 0,
-    unit: ''
+    description: ''
   });
 
   const handleFileAccepted = (file: File) => {
@@ -38,24 +37,25 @@ const PricebookUpload: React.FC = () => {
         }
 
         const uploadId = Date.now().toString();
-        addEntries(results.data, uploadId);
+        addEntries(results.data as PricebookEntry[], uploadId);
         toast.success('Pricebook data uploaded successfully');
       } catch (error) {
+        console.error('Failed to process file:', error);
         toast.error('Failed to process the file');
       }
     };
     reader.readAsText(file);
   };
 
-  const handleEdit = (entry: any) => {
+  const handleEdit = (entry: PricebookEntry) => {
     setShowEditModal(entry);
   };
 
-  const handleDelete = (entry: any) => {
+  const handleDelete = (entry: PricebookEntry) => {
     setShowDeleteModal(entry);
   };
 
-  const handleUndelete = (entry: any) => {
+  const handleUndelete = (entry: PricebookEntry) => {
     undeleteEntry(entry.id);
     toast.success('Item restored successfully');
   };
@@ -79,28 +79,39 @@ const PricebookUpload: React.FC = () => {
   const handleCreateItem = () => {
     const item = {
       ...newItem,
-      id: `manual-${Date.now()}`
+      id: `manual-${Date.now()}`,
+      upload_id: 'manual'
     };
 
     addEntries([item], 'manual');
     setShowNewItemModal(false);
     setNewItem({
-      sku: '',
       name: '',
-      category: '',
       price: 0,
-      unit: ''
+      description: ''
     });
     toast.success('Item created successfully');
   };
 
+  const handleDeleteUpload = (uploadId: string) => {
+    setShowDeleteUploadModal(uploadId);
+  };
+
+  const handleConfirmDeleteUpload = async () => {
+    if (showDeleteUploadModal) {
+      await removeEntriesByUploadId(showDeleteUploadModal);
+      setShowDeleteUploadModal(null);
+      toast.success('Upload deleted successfully');
+    }
+  };
+
   const uploads = useMemo(() => {
-    const uploadIds = new Set(entries.map(e => e.uploadId));
+    const uploadIds = new Set(entries.map(e => e.upload_id));
     return Array.from(uploadIds).map(id => ({
       id,
       date: new Date().toISOString(),
       filename: id === 'manual' ? 'Manually Added' : `Upload ${id}`,
-      records: entries.filter(e => e.uploadId === id).length
+      records: entries.filter(e => e.upload_id === id).length
     }));
   }, [entries]);
 
@@ -115,13 +126,12 @@ const PricebookUpload: React.FC = () => {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(entry => 
         entry.name.toLowerCase().includes(search) ||
-        entry.sku.toLowerCase().includes(search) ||
-        entry.category.toLowerCase().includes(search)
+        entry.description?.toLowerCase().includes(search)
       );
     }
 
     if (selectedFilter) {
-      filtered = filtered.filter(entry => entry.uploadId === selectedFilter);
+      filtered = filtered.filter(entry => entry.upload_id === selectedFilter);
     }
 
     return filtered;
@@ -168,20 +178,31 @@ const PricebookUpload: React.FC = () => {
                 <h3 className="text-lg font-semibold mb-4">Previous Uploads</h3>
                 <div className="space-y-4 max-h-64 overflow-y-auto">
                   {uploads.map((upload) => (
-                    <button
+                    <div
                       key={upload.id}
-                      onClick={() => setSelectedFilter(upload.id)}
-                      className={`w-full text-left p-4 rounded-lg transition-colors ${
-                        selectedFilter === upload.id
-                          ? 'bg-blue-50 border-2 border-blue-200'
-                          : 'bg-gray-50 hover:bg-gray-100'
-                      }`}
+                      className="flex items-center justify-between"
                     >
-                      <p className="font-medium">{upload.filename}</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(upload.date).toLocaleDateString()} • {upload.records} records
-                      </p>
-                    </button>
+                      <button
+                        onClick={() => setSelectedFilter(upload.id || null)}
+                        className={`flex-1 text-left p-4 rounded-lg transition-colors ${
+                          selectedFilter === upload.id
+                            ? 'bg-blue-50 border-2 border-blue-200'
+                            : 'bg-gray-50 hover:bg-gray-100'
+                        }`}
+                      >
+                        <p className="font-medium">{upload.filename}</p>
+                        <p className="text-sm text-gray-600">
+                          {new Date(upload.date).toLocaleDateString()} • {upload.records} records
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUpload(upload.id || '')}
+                        className="ml-2 p-2 text-gray-500 hover:text-red-500 rounded-lg"
+                        title="Delete Upload"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -215,9 +236,9 @@ const PricebookUpload: React.FC = () => {
 
       {/* Pricebook Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <DataTable
+        <DataTable<PricebookEntry>
           data={filteredEntries}
-          columns={['sku', 'name', 'category', 'price', 'unit']}
+          columns={['name', 'price', 'description']}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onUndelete={handleUndelete}
@@ -231,15 +252,6 @@ const PricebookUpload: React.FC = () => {
             <h2 className="text-xl font-bold mb-4">Edit Item</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                <input
-                  type="text"
-                  value={showEditModal.sku}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, sku: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
@@ -249,30 +261,22 @@ const PricebookUpload: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <input
-                  type="text"
-                  value={showEditModal.category}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, category: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
                 <input
                   type="number"
+                  step="0.01"
                   value={showEditModal.price}
                   onChange={(e) => setShowEditModal({ ...showEditModal, price: Number(e.target.value) })}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                <input
-                  type="text"
-                  value={showEditModal.unit}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, unit: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={showEditModal.description}
+                  onChange={(e) => setShowEditModal({ ...showEditModal, description: e.target.value })}
                   className="w-full p-2 border rounded-lg"
+                  rows={3}
                 />
               </div>
             </div>
@@ -327,15 +331,6 @@ const PricebookUpload: React.FC = () => {
             <h2 className="text-xl font-bold mb-4">New Item</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                <input
-                  type="text"
-                  value={newItem.sku}
-                  onChange={(e) => setNewItem({ ...newItem, sku: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
@@ -345,30 +340,22 @@ const PricebookUpload: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <input
-                  type="text"
-                  value={newItem.category}
-                  onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
                 <input
                   type="number"
+                  step="0.01"
                   value={newItem.price}
                   onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                <input
-                  type="text"
-                  value={newItem.unit}
-                  onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                   className="w-full p-2 border rounded-lg"
+                  rows={3}
                 />
               </div>
             </div>
@@ -384,6 +371,32 @@ const PricebookUpload: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Create Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Upload Confirmation Modal */}
+      {showDeleteUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
+            <h2 className="text-xl font-bold mb-4">Delete Upload</h2>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete this upload? This will remove all items associated with this upload.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowDeleteUploadModal(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteUpload}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Delete Upload
               </button>
             </div>
           </div>

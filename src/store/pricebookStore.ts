@@ -5,11 +5,9 @@ import { useAuthStore } from './authStore';
 export interface PricebookEntry {
   id: string;
   user_id: string;
-  sku: string;
   name: string;
-  category: string;
   price: number;
-  unit: string;
+  description: string;
   upload_id?: string;
   deleted?: boolean;
   created_at?: string;

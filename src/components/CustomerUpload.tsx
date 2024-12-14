@@ -57,14 +57,13 @@ const CustomerUpload: React.FC = () => {
   });
 
   const [newCustomer, setNewCustomer] = useState({
-    name: '',
-    email: '',
-    address: '',
-    city: '',
-    state: '',
-    propertyType: '',
-    propertySize: '',
-    yearBuilt: ''
+    Names: '',
+    Address1: '',
+    City: '',
+    State: '',
+    PostalCode: '',
+    CombinedAddress: '',
+    uploadId: 'manual'
   });
 
   const [showColumnMapModal, setShowColumnMapModal] = useState(false);
@@ -79,16 +78,16 @@ const CustomerUpload: React.FC = () => {
   });
   const [pendingFileData, setPendingFileData] = useState<string | null>(null);
 
-  const handleEdit = (customer: Record<string, unknown>) => {
-    setShowEditModal(customer as unknown as Customer);
+  const handleEdit = (customer: Customer) => {
+    setShowEditModal(customer);
   };
 
-  const handleDelete = (customer: Record<string, unknown>) => {
-    setShowDeleteModal(customer as unknown as Customer);
+  const handleDelete = (customer: Customer) => {
+    setShowDeleteModal(customer);
   };
 
-  const handleUndelete = (customer: Record<string, unknown>) => {
-    undeleteCustomer((customer as unknown as Customer).id);
+  const handleUndelete = (customer: Customer) => {
+    undeleteCustomer(customer.id);
     toast.success('Customer restored successfully');
   };
 
@@ -110,28 +109,20 @@ const CustomerUpload: React.FC = () => {
 
   const handleCreateCustomer = () => {
     const customer = {
-      name: newCustomer.name,
-      email: newCustomer.email,
-      address: newCustomer.address,
-      city: newCustomer.city,
-      state: newCustomer.state,
-      propertyType: newCustomer.propertyType,
-      propertySize: newCustomer.propertySize,
-      yearBuilt: newCustomer.yearBuilt,
-      uploadId: 'manual'
+      ...newCustomer,
+      CombinedAddress: `${newCustomer.Address1}, ${newCustomer.City}, ${newCustomer.State} ${newCustomer.PostalCode}`.trim()
     };
 
-    addCustomers([customer], 'manual');
+    addCustomers([customer as unknown as Customer], 'manual');
     setShowNewCustomerModal(false);
     setNewCustomer({
-      name: '',
-      email: '',
-      address: '',
-      city: '',
-      state: '',
-      propertyType: '',
-      propertySize: '',
-      yearBuilt: ''
+      Names: '',
+      Address1: '',
+      City: '',
+      State: '',
+      PostalCode: '',
+      CombinedAddress: '',
+      uploadId: 'manual'
     });
     toast.success('Customer created successfully');
   };
@@ -702,17 +693,8 @@ const CustomerUpload: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
-                  value={newCustomer.name}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={newCustomer.email}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                  value={newCustomer.Names}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, Names: e.target.value })}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
@@ -720,8 +702,8 @@ const CustomerUpload: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                 <input
                   type="text"
-                  value={newCustomer.address}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                  value={newCustomer.Address1}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, Address1: e.target.value })}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
@@ -730,8 +712,8 @@ const CustomerUpload: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                   <input
                     type="text"
-                    value={newCustomer.city}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
+                    value={newCustomer.City}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, City: e.target.value })}
                     className="w-full p-2 border rounded-lg"
                   />
                 </div>
@@ -739,11 +721,20 @@ const CustomerUpload: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                   <input
                     type="text"
-                    value={newCustomer.state}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, state: e.target.value })}
+                    value={newCustomer.State}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, State: e.target.value })}
                     className="w-full p-2 border rounded-lg"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                <input
+                  type="text"
+                  value={newCustomer.PostalCode}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, PostalCode: e.target.value })}
+                  className="w-full p-2 border rounded-lg"
+                />
               </div>
             </div>
             <div className="flex justify-end space-x-4 mt-6">
