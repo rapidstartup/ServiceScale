@@ -11,7 +11,7 @@ import { Customer } from '../store/customerStore';
 import { useTemplateStore } from '../store/templateStore';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
-import { PropertyData } from '../types/attom';
+import { getPropertyData } from '../services/attomApi';
 
 interface CSVRow {
   [key: string]: string | undefined;
@@ -238,11 +238,7 @@ const CustomerUpload: React.FC = () => {
   const handleGetPropertyData = async (customer: Customer) => {
     setLoadingPropertyIds(prev => [...prev, customer.id]);
     try {
-      const response = await fetch(`/api/property?address1=${encodeURIComponent(customer.Address1)}&address2=${encodeURIComponent(`${customer.City}, ${customer.State}`)}`);
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
-      }
-      const data: PropertyData = await response.json();
+      const data = await getPropertyData(customer.Address1, customer.City, customer.State);
       
       // Create output record with separate fields
       const outputRecord = {
