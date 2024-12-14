@@ -4,7 +4,6 @@ import { useAuthStore } from './authStore';
 
 export interface Customer {
   id: string;
-  user_id: string;
   Names: string;
   Address1: string;
   City: string;
@@ -13,8 +12,13 @@ export interface Customer {
   CombinedAddress: string;
   uploadId?: string;
   deleted?: boolean;
-  created_at?: string;
-  updated_at?: string;
+  user_id?: string;
+  propertyType?: string;
+  propertySize?: string;
+  yearBuilt?: string;
+  bedrooms?: string;
+  bathrooms?: string;
+  lotSize?: string;
 }
 
 export interface OutputRecord {

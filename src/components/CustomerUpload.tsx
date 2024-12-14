@@ -267,12 +267,12 @@ const CustomerUpload: React.FC = () => {
         state: customer.State,
         postalcode: customer.PostalCode,
         combinedaddress: customer.CombinedAddress, // Keep original combined address
-        propertytype: data.propertyType,
-        propertysize: data.propertySize,
-        yearbuilt: data.yearBuilt,
+        property_type: data.propertyType,
+        property_size: data.propertySize,
+        year_built: data.yearBuilt,
         bedrooms: parseInt(data.bedrooms) || 0,
         bathrooms: parseInt(data.bathrooms) || 0,
-        lotsize: data.lotSize
+        lot_size: data.lotSize
       };
 
       console.log('Attempting to store property data in Supabase:', outputRecord);
@@ -280,7 +280,7 @@ const CustomerUpload: React.FC = () => {
       // Then, try to store in Supabase
       try {
         const { error } = await supabase
-          .from('OUTPUT')
+          .from('output')
           .insert([outputRecord]);
 
         if (error) {
