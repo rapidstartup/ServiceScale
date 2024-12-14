@@ -5,12 +5,12 @@ import { toast } from 'react-hot-toast';
 import FileDropzone from './shared/FileDropzone';
 import DataTable from './shared/DataTable';
 import { useCustomerStore } from '../store/customerStore';
-import { getPropertyData } from '../services/attomApi';
 import { calculateHVACZones } from '../utils/hvacCalculator';
-import { useQuoteStore } from '../store/quoteStore';
 import { usePricebookStore } from '../store/pricebookStore';
 import { Customer } from '../store/customerStore';
 import { useTemplateStore } from '../store/templateStore';
+import { useAuthStore } from '../store/authStore';
+import { supabase } from '../lib/supabase';
 
 interface CSVRow {
   [key: string]: string | undefined;
@@ -34,14 +34,12 @@ interface CSVRow {
 }
 
 const CustomerUpload: React.FC = () => {
-  const { customers, addCustomers, removeCustomersByUploadId, updateCustomer, deleteCustomer, undeleteCustomer } = useCustomerStore();
+  const { customers, addCustomers, removeCustomersByUploadId, updateCustomer, deleteCustomer, undeleteCustomer, fetchOutputs } = useCustomerStore();
   const { entries: pricebookEntries } = usePricebookStore();
-  const { addQuote } = useQuoteStore();
   const { templates } = useTemplateStore();
   const [isUploadOpen, setIsUploadOpen] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
-  const [isLoadingPropertyData, setIsLoadingPropertyData] = useState(false);
   const [isGeneratingQuotes, setIsGeneratingQuotes] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Customer | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<Customer | null>(null);
@@ -77,6 +75,7 @@ const CustomerUpload: React.FC = () => {
     PostalCode: ''
   });
   const [pendingFileData, setPendingFileData] = useState<string | null>(null);
+  const [loadingPropertyIds, setLoadingPropertyIds] = useState<string[]>([]);
 
   const handleEdit = (customer: Customer) => {
     setShowEditModal(customer);
@@ -235,49 +234,44 @@ const CustomerUpload: React.FC = () => {
     }
   };
 
-  const handleGetPropertyData = async () => {
-    if (selectedCustomers.length === 0) {
-      toast.error('Please select at least one customer');
-      return;
-    }
-
-    setIsLoadingPropertyData(true);
-    let successCount = 0;
-    let errorCount = 0;
-
+  const handleGetPropertyData = async (customer: Customer) => {
+    setLoadingPropertyIds(prev => [...prev, customer.id]);
     try {
-      const customersToProcess = filteredCustomers.filter(c => 
-        selectedCustomers.includes(c.id) && !c.deleted
-      );
+      const response = await fetch(`/api/property?address1=${encodeURIComponent(customer.Address1)}&address2=${encodeURIComponent(`${customer.City}, ${customer.State}`)}`);
+      const data = await response.json();
+      
+      // Create output record with separate fields
+      const outputRecord = {
+        customer_id: customer.id,
+        names: customer.Names,
+        address1: customer.Address1,
+        city: customer.City,
+        state: customer.State,
+        postalcode: customer.PostalCode,
+        combinedaddress: customer.CombinedAddress,
+        propertytype: data.propertyType || '',
+        propertysize: data.buildingSize || '',
+        yearbuilt: data.yearBuilt || '',
+        bedrooms: data.bedrooms || 0,
+        bathrooms: data.bathrooms || 0,
+        lotsize: data.lotSize || ''
+      };
 
-      for (const customer of customersToProcess) {
-        try {
-          const propertyData = await getPropertyData(
-            customer.Address1,
-            customer.City,
-            customer.State
-          );
+      const { error } = await supabase
+        .from('OUTPUT')
+        .insert([outputRecord]);
 
-          updateCustomer(customer.id, {
-            ...customer,
-            CombinedAddress: `${customer.Address1}, ${customer.City}, ${customer.State} ${customer.PostalCode} | ${propertyData.propertyType} | ${propertyData.propertySize} | Built: ${propertyData.yearBuilt} | ${propertyData.bedrooms} bed | ${propertyData.bathrooms} bath | Lot: ${propertyData.lotSize}`
-          });
+      if (error) throw error;
 
-          successCount++;
-        } catch (error) {
-          console.error('Error processing customer:', customer.id, error);
-          errorCount++;
-        }
-      }
+      // Refresh the data after insert
+      await fetchOutputs();
+      toast.success('Property data retrieved successfully');
 
-      if (successCount > 0) {
-        toast.success(`Successfully enriched ${successCount} customer records`);
-      }
-      if (errorCount > 0) {
-        toast.error(`Failed to process ${errorCount} records`);
-      }
+    } catch (error) {
+      console.error('Error fetching property data:', error);
+      toast.error('Failed to retrieve property data');
     } finally {
-      setIsLoadingPropertyData(false);
+      setLoadingPropertyIds(prev => prev.filter(id => id !== customer.id));
     }
   };
 
@@ -298,24 +292,58 @@ const CustomerUpload: React.FC = () => {
 
       for (const customer of customersToProcess) {
         try {
-          const propertySizeMatch = customer.CombinedAddress.match(/\|\s*([\d,]+)\s*sqft/);
-          const propertyTypeMatch = customer.CombinedAddress.match(/\|\s*([^|]+?)\s*\|/);
-          const yearBuiltMatch = customer.CombinedAddress.match(/Built:\s*(\d+)/);
-          const bedroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bed/);
-          const bathroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bath/);
+          // Get the property data from the OUTPUT table first
+          const { data: outputData } = await supabase
+            .from('OUTPUT')
+            .select('*')
+            .eq('customer_id', customer.id)
+            .single();
+
+          let propertyDetails;
           
-          const propertySize = propertySizeMatch ? propertySizeMatch[1] : '2,500';
-          const propertyType = propertyTypeMatch ? propertyTypeMatch[1].trim() : 'Single Family';
-          const yearBuilt = yearBuiltMatch ? yearBuiltMatch[1] : '2000';
-          const bedrooms = bedroomsMatch ? bedroomsMatch[1] : '3';
-          const bathrooms = bathroomsMatch ? bathroomsMatch[1] : '2';
+          if (outputData) {
+            // Use the OUTPUT table data if available
+            propertyDetails = {
+              address: {
+                streetAddress: outputData.address1,
+                city: outputData.city,
+                state: outputData.state
+              },
+              type: outputData.propertytype,
+              size: outputData.propertysize,
+              yearBuilt: outputData.yearbuilt,
+              bedrooms: outputData.bedrooms,
+              bathrooms: outputData.bathrooms,
+              lotSize: outputData.lotsize
+            };
+          } else {
+            // Fallback to parsing CombinedAddress if no OUTPUT record exists
+            const propertySizeMatch = customer.CombinedAddress.match(/\|\s*([\d,]+)\s*sqft/);
+            const propertyTypeMatch = customer.CombinedAddress.match(/\|\s*([^|]+?)\s*\|/);
+            const yearBuiltMatch = customer.CombinedAddress.match(/Built:\s*(\d+)/);
+            const bedroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bed/);
+            const bathroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bath/);
+            
+            propertyDetails = {
+              address: {
+                streetAddress: customer.Address1,
+                city: customer.City,
+                state: customer.State
+              },
+              type: propertyTypeMatch ? propertyTypeMatch[1].trim() : 'Single Family',
+              size: propertySizeMatch ? propertySizeMatch[1] + ' sqft' : '2,500 sqft',
+              yearBuilt: yearBuiltMatch ? yearBuiltMatch[1] : '2000',
+              bedrooms: bedroomsMatch ? bedroomsMatch[1] : '3',
+              bathrooms: bathroomsMatch ? bathroomsMatch[1] : '2'
+            };
+          }
 
           const zones = calculateHVACZones({
-            grossSquareFootage: parseInt(propertySize.replace(/[^0-9]/g, '') || '0'),
+            grossSquareFootage: parseInt(propertyDetails.size.replace(/[^0-9]/g, '') || '0'),
             basementSquareFootage: 0,
-            livingSquareFootage: parseInt(propertySize.replace(/[^0-9]/g, '') || '0'),
+            livingSquareFootage: parseInt(propertyDetails.size.replace(/[^0-9]/g, '') || '0'),
             hasBasement: 'N',
-            fullBaths: 2,
+            fullBaths: parseInt(propertyDetails.bathrooms),
             halfBaths: 0
           });
 
@@ -323,27 +351,18 @@ const CustomerUpload: React.FC = () => {
           const zonePrice = pricebookEntries.find(entry => entry.name === 'Additional Zone')?.price || 2500;
           const total = basePrice + (zones - 1) * zonePrice;
 
-          addQuote({
-            status: 'active',
-            customer_id: customer.id,
-            service: `${zones}-Zone HVAC System`,
-            total,
-            template_id: templates.find(t => t.is_default)?.id || '',
-            created_at: new Date().toISOString(),
-            property_details: {
-              address: {
-                streetAddress: customer.Address1,
-                city: customer.City,
-                state: customer.State
-              },
-              type: propertyType,
-              size: `${propertySize} sqft`,
-              yearBuilt,
-              bedrooms,
-              bathrooms
-            }
-          });
+          const { error: quoteError } = await supabase
+            .from('quotes')
+            .insert({
+              customer_id: customer.id,
+              service: `${zones}-Zone HVAC System`,
+              total,
+              template_id: templates.find(t => t.is_default)?.id || '',
+              property_details: propertyDetails,
+              user_id: useAuthStore.getState().user?.id
+            });
 
+          if (quoteError) throw quoteError;
           successCount++;
         } catch (error) {
           console.error('Error generating quote for customer:', customer.id, error);
@@ -444,12 +463,15 @@ const CustomerUpload: React.FC = () => {
         </div>
         <div className="flex items-center space-x-4">
           <button
-            onClick={handleGetPropertyData}
-            disabled={isLoadingPropertyData || selectedCustomers.length === 0}
+            onClick={() => {
+              const customer = customers.find(c => c.id === selectedCustomers[0]);
+              if (customer) handleGetPropertyData(customer);
+            }}
+            disabled={loadingPropertyIds.length > 0 || selectedCustomers.length === 0}
             className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Database className="h-4 w-4" />
-            <span>{isLoadingPropertyData ? 'Loading...' : 'Get Property Data'}</span>
+            <span>{loadingPropertyIds.length > 0 ? 'Loading...' : 'Get Property Data'}</span>
           </button>
           <button
             onClick={handleGenerateQuotes}
@@ -610,6 +632,8 @@ const CustomerUpload: React.FC = () => {
           selectedIds={selectedCustomers}
           onSelectAll={handleSelectAll}
           onSelectRow={handleSelectCustomer}
+          loadingRows={loadingPropertyIds}
+          loadingMessage="Gathering property information..."
         />
       </div>
 

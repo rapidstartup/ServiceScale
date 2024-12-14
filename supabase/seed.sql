@@ -38,6 +38,10 @@ CREATE TABLE quotes (
     template_id UUID REFERENCES templates(id),
     content TEXT,
     user_id UUID REFERENCES auth.users(id),
+    status TEXT DEFAULT 'active',
+    service TEXT,
+    total DECIMAL(10,2),
+    property_details JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -54,7 +58,7 @@ CREATE TABLE pricebook_entries (
 
 CREATE TABLE IF NOT EXISTS OUTPUT (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id UUID REFERENCES CUSTOMER(id),
+    customer_id UUID REFERENCES customers(id),
     names TEXT,
     address1 TEXT,
     city TEXT,
@@ -332,4 +336,49 @@ GRANT ALL ON customers TO authenticated;
 GRANT ALL ON templates TO authenticated;
 GRANT ALL ON quotes TO authenticated;
 GRANT ALL ON pricebook_entries TO authenticated;
+
+-- Enable RLS for OUTPUT table
+ALTER TABLE OUTPUT ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for OUTPUT table
+CREATE POLICY "Admin full access to output"
+ON OUTPUT
+FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM auth.users
+        WHERE auth.users.id = auth.uid()
+        AND (auth.users.raw_user_meta_data->>'is_admin')::boolean = true
+    )
+);
+
+CREATE POLICY "Users access own output through customers"
+ON OUTPUT
+FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM customers
+        WHERE customers.id = OUTPUT.customer_id
+        AND customers.user_id = auth.uid()
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM customers
+        WHERE customers.id = OUTPUT.customer_id
+        AND customers.user_id = auth.uid()
+    )
+);
+
+-- Grant permissions
+GRANT ALL ON OUTPUT TO authenticated;
   

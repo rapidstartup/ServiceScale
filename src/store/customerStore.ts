@@ -49,6 +49,7 @@ interface CustomerStore {
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
   undeleteCustomer: (id: string) => Promise<void>;
+  fetchOutputs: () => Promise<void>;
 }
 
 export const useCustomerStore = create<CustomerStore>()((set) => ({
@@ -198,6 +199,24 @@ export const useCustomerStore = create<CustomerStore>()((set) => ({
     } catch (error) {
       set({ error: (error as Error).message });
       throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchOutputs: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('OUTPUT')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      set({ outputs: data || [] });
+    } catch (error) {
+      set({ error: (error as Error).message });
     } finally {
       set({ isLoading: false });
     }
