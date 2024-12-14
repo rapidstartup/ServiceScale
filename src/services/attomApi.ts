@@ -1,6 +1,8 @@
 import { AttomResponse, PropertyData } from '../types/attom';
 
 export async function getPropertyData(address: string, city: string, state: string): Promise<PropertyData> {
+  console.log('Starting ATTOM API call with:', { address, city, state });
+  
   if (!address || !city || !state) {
     throw new Error('Missing required address information');
   }
@@ -20,6 +22,7 @@ export async function getPropertyData(address: string, city: string, state: stri
 
     const url = `${attomApiBase}/propertyapi/v1.0.0/property/basicprofile?address1=${address1}&address2=${address2}`;
     console.log('ATTOM API URL:', url);
+    console.log('ATTOM API Key present:', !!attomApiKey);
 
     const response = await fetch(url, {
       headers: {
@@ -28,11 +31,16 @@ export async function getPropertyData(address: string, city: string, state: stri
       },
     });
 
+    console.log('ATTOM API Response status:', response.status, response.statusText);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('ATTOM API error response:', errorText);
       throw new Error(`ATTOM API error: ${response.status} ${response.statusText}`);
     }
 
     const data: AttomResponse = await response.json();
+    console.log('ATTOM API Response data:', data);
 
     if (data.status.code !== 0 || !data.property?.[0]) {
       throw new Error('Property not found');
@@ -42,7 +50,7 @@ export async function getPropertyData(address: string, city: string, state: stri
     const building = property.building;
     const summary = property.summary;
 
-    return {
+    const result = {
       propertyType: summary?.propClass || 'Unknown',
       propertySize: building?.size?.universalSize 
         ? `${building.size.universalSize.toLocaleString()} sqft`
@@ -55,6 +63,9 @@ export async function getPropertyData(address: string, city: string, state: stri
       bathrooms: building?.rooms?.bathsTotal?.toString() || '0',
       recentPermits: [] // Since basicprofile endpoint doesn't include permit data
     };
+
+    console.log('ATTOM API Processed result:', result);
+    return result;
   } catch (error) {
     console.error('ATTOM API Error:', error);
     throw error;

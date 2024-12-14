@@ -238,7 +238,11 @@ const CustomerUpload: React.FC = () => {
   const handleGetPropertyData = async (customer: Customer) => {
     setLoadingPropertyIds(prev => [...prev, customer.id]);
     try {
+      console.log('Starting property data fetch for customer:', customer);
+      
+      // First, make the ATTOM API call
       const data = await getPropertyData(customer.Address1, customer.City, customer.State);
+      console.log('Received property data from ATTOM:', data);
       
       // Create output record with separate fields
       const outputRecord = {
@@ -257,18 +261,26 @@ const CustomerUpload: React.FC = () => {
         lotsize: data.lotSize
       };
 
+      console.log('Storing property data in Supabase:', outputRecord);
+      
+      // Then, store in Supabase
       const { error } = await supabase
         .from('OUTPUT')
         .insert([outputRecord]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase storage error:', error);
+        throw error;
+      }
+
+      console.log('Successfully stored property data in Supabase');
 
       // Refresh the data after insert
       await fetchOutputs();
-      toast.success('Property data retrieved successfully');
+      toast.success('Property data retrieved and stored successfully');
 
     } catch (error) {
-      console.error('Error fetching property data:', error);
+      console.error('Error in handleGetPropertyData:', error);
       toast.error('Failed to retrieve property data');
     } finally {
       setLoadingPropertyIds(prev => prev.filter(id => id !== customer.id));
