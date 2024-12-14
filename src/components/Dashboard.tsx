@@ -22,11 +22,16 @@ const Dashboard = () => {
     // Check Supabase connection
     const checkConnection = async () => {
       try {
+        console.log('Checking Supabase connection...');
+        console.log('URL:', import.meta.env.VITE_SUPABASE_URL);
+        console.log('Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+        
         const { data, error } = await supabase.from('customers').select('count');
         if (error) {
-          console.error('Supabase connection error:', error);
+          console.error('Supabase connection error:', error.message);
+          console.error('Error details:', error);
         } else {
-          console.log('Supabase connection successful:', data);
+          console.log('Supabase connection successful, count:', data);
         }
       } catch (err) {
         console.error('Failed to check Supabase connection:', err);
