@@ -4,10 +4,12 @@ import { Users, Plus, ChevronDown, ChevronUp, Database, FileText, Search, Trash2
 import { toast } from 'react-hot-toast';
 import FileDropzone from './shared/FileDropzone';
 import DataTable from './shared/DataTable';
-import { Customer, useCustomerStore } from '../store/customerStore';
+import { useCustomerStore } from '../store/customerStore';
 import { getPropertyData } from '../services/attomApi';
 import { calculateHVACZones } from '../utils/hvacCalculator';
 import { useQuoteStore } from '../store/quoteStore';
+import { usePricebookStore } from '../store/pricebookStore';
+import { Customer } from '../store/customerStore';
 import { useTemplateStore } from '../store/templateStore';
 
 interface CSVRow {
@@ -32,7 +34,8 @@ interface CSVRow {
 }
 
 const CustomerUpload: React.FC = () => {
-  const { customers, addCustomers, updateCustomer, deleteCustomer, undeleteCustomer, removeCustomersByUploadId } = useCustomerStore();
+  const { customers, addCustomers, removeCustomersByUploadId, updateCustomer, deleteCustomer, undeleteCustomer } = useCustomerStore();
+  const { entries: pricebookEntries } = usePricebookStore();
   const { addQuote } = useQuoteStore();
   const { templates } = useTemplateStore();
   const [isUploadOpen, setIsUploadOpen] = useState(true);
@@ -43,6 +46,7 @@ const CustomerUpload: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState<Customer | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<Customer | null>(null);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
+  const [showDeleteUploadModal, setShowDeleteUploadModal] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     uploadId: '',
     propertyType: '',
@@ -63,7 +67,17 @@ const CustomerUpload: React.FC = () => {
     yearBuilt: ''
   });
 
-  const [showDeleteUploadModal, setShowDeleteUploadModal] = useState<string | null>(null);
+  const [showColumnMapModal, setShowColumnMapModal] = useState(false);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvFirstRow, setCsvFirstRow] = useState<Record<string, string>>({});
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({
+    name: '',
+    email: '',
+    address: '',
+    city: '',
+    state: ''
+  });
+  const [pendingFileData, setPendingFileData] = useState<string | null>(null);
 
   const handleEdit = (customer: Record<string, unknown>) => {
     setShowEditModal(customer as unknown as Customer);
@@ -96,8 +110,15 @@ const CustomerUpload: React.FC = () => {
 
   const handleCreateCustomer = () => {
     const customer = {
-      ...newCustomer,
-      id: `manual-${Date.now()}`
+      name: newCustomer.name,
+      email: newCustomer.email,
+      address: newCustomer.address,
+      city: newCustomer.city,
+      state: newCustomer.state,
+      propertyType: newCustomer.propertyType,
+      propertySize: newCustomer.propertySize,
+      yearBuilt: newCustomer.yearBuilt,
+      uploadId: 'manual'
     };
 
     addCustomers([customer], 'manual');
@@ -147,14 +168,15 @@ const CustomerUpload: React.FC = () => {
     };
   }, [customers]);
 
-  const handleFileAccepted = async (file: File) => {
+  const handleFileAccepted = (file: File) => {
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
-        const csv = e.target?.result;
-        const results = parse<CSVRow>(csv as string, {
+        const csv = e.target?.result as string;
+        const results = parse(csv, {
           header: true,
           skipEmptyLines: true,
+          preview: 1
         });
 
         if (results.errors.length) {
@@ -162,28 +184,60 @@ const CustomerUpload: React.FC = () => {
           return;
         }
 
-        // Map CSV columns to database columns
-        const mappedData = results.data.map((row: CSVRow) => ({
-          name: row['Names'] || row['Name'] || row['names'] || row['name'] || '',
-          email: row['Email'] || row['email'] || '',
-          address: row['Address1'] || row['Address 1'] || row['address1'] || row['address'] || '',
-          city: row['City'] || row['city'] || '',
-          state: row['State'] || row['state'] || '',
-          propertyType: '',
-          propertySize: '',
-          yearBuilt: '',
-          uploadId: uploadId
-        }));
-
-        const uploadId = Date.now().toString();
-        addCustomers(mappedData, uploadId);
-        toast.success('Customer data uploaded successfully');
+        setCsvHeaders(results.meta.fields || []);
+        setCsvFirstRow((results.data[0] || {}) as Record<string, string>);
+        setPendingFileData(csv);
+        setShowColumnMapModal(true);
       } catch (error) {
         console.error('Upload error:', error);
         toast.error('Failed to process the file');
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleConfirmMapping = () => {
+    if (!pendingFileData) return;
+
+    try {
+      const results = parse<CSVRow>(pendingFileData, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      if (results.errors.length) {
+        toast.error('Error parsing CSV file');
+        return;
+      }
+
+      const uploadId = Date.now().toString();
+      const mappedData = results.data.map(row => ({
+        name: row.Names || row.Name || row.names || '',
+        email: row.Email || '',
+        address: row.Address1 || row['Address 1'] || row.address1 || row.address || '',
+        city: row.City || row.city || '',
+        state: row.State || row.state || '',
+        propertyType: '',
+        propertySize: '',
+        yearBuilt: '',
+        uploadId
+      }));
+
+      addCustomers(mappedData, uploadId);
+      toast.success('Customer data uploaded successfully');
+      setShowColumnMapModal(false);
+      setPendingFileData(null);
+      setColumnMapping({
+        name: '',
+        email: '',
+        address: '',
+        city: '',
+        state: ''
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to process the file');
+    }
   };
 
   const handleGetPropertyData = async () => {
@@ -263,11 +317,15 @@ const CustomerUpload: React.FC = () => {
             halfBaths: 0
           });
 
+          const basePrice = pricebookEntries.find(entry => entry.name === 'Base HVAC System')?.price || 5000;
+          const zonePrice = pricebookEntries.find(entry => entry.name === 'Additional Zone')?.price || 2500;
+          const total = basePrice + (zones - 1) * zonePrice;
+
           addQuote({
             status: 'active',
             customer_id: customer.id,
             service: `${zones}-Zone HVAC System`,
-            total: zones * 5000,
+            total,
             template_id: templates.find(t => t.is_default)?.id || '',
             created_at: new Date().toISOString(),
             property_details: {
@@ -700,6 +758,69 @@ const CustomerUpload: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Create Customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showColumnMapModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full mx-4 p-6">
+            <h2 className="text-xl font-bold mb-4">Map CSV Columns</h2>
+            <p className="text-gray-600 mb-6">
+              Please map your CSV columns to the required fields. Preview of first row shown below.
+            </p>
+            
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                {Object.entries({
+                  name: 'Customer Name',
+                  email: 'Email',
+                  address: 'Address',
+                  city: 'City',
+                  state: 'State'
+                }).map(([field, label]) => (
+                  <div key={field}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {label}
+                    </label>
+                    <select
+                      value={columnMapping[field]}
+                      onChange={(e) => setColumnMapping({
+                        ...columnMapping,
+                        [field]: e.target.value
+                      })}
+                      className="w-full p-2 border rounded-lg"
+                    >
+                      <option value="">Select column</option>
+                      {csvHeaders.map((header) => (
+                        <option key={header} value={header}>
+                          {header} {csvFirstRow[header] ? `(e.g., ${csvFirstRow[header]})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-4 mt-6">
+              <button
+                onClick={() => {
+                  setShowColumnMapModal(false);
+                  setPendingFileData(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmMapping}
+                disabled={!Object.values(columnMapping).every(Boolean)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Import Data
               </button>
             </div>
           </div>
