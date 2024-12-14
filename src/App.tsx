@@ -105,12 +105,12 @@ export default function App() {
           </ProtectedRoute>
         } />
         <Route path="/templates/new" element={
-          <ProtectedRoute>
+          <ProtectedRoute requireAdmin>
             <TemplateEditor />
           </ProtectedRoute>
         } />
         <Route path="/templates/:id" element={
-          <ProtectedRoute>
+          <ProtectedRoute requireAdmin>
             <TemplateEditor />
           </ProtectedRoute>
         } />
