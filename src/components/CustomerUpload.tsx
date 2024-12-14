@@ -244,14 +244,19 @@ const CustomerUpload: React.FC = () => {
       const data = await getPropertyData(customer.Address1, customer.City, customer.State);
       console.log('Received property data from ATTOM:', data);
       
-      // Update the customer's CombinedAddress with the new property data
-      const updatedCombinedAddress = `${customer.CombinedAddress} | ${data.propertyType} | ${data.propertySize} | Built: ${data.yearBuilt} | ${data.bedrooms} bed | ${data.bathrooms} bath | Lot: ${data.lotSize}`;
+      // Update the customer with the new property data in separate fields
+      const updatedCustomer = {
+        ...customer,
+        propertyType: data.propertyType,
+        propertySize: data.propertySize,
+        yearBuilt: data.yearBuilt,
+        bedrooms: data.bedrooms,
+        bathrooms: data.bathrooms,
+        lotSize: data.lotSize
+      };
       
       // Update the customer in the store first (this will update the UI)
-      updateCustomer(customer.id, {
-        ...customer,
-        CombinedAddress: updatedCombinedAddress
-      });
+      updateCustomer(customer.id, updatedCustomer);
 
       // Create output record
       const outputRecord = {
@@ -261,7 +266,7 @@ const CustomerUpload: React.FC = () => {
         city: customer.City,
         state: customer.State,
         postalcode: customer.PostalCode,
-        combinedaddress: updatedCombinedAddress,
+        combinedaddress: customer.CombinedAddress, // Keep original combined address
         propertytype: data.propertyType,
         propertysize: data.propertySize,
         yearbuilt: data.yearBuilt,
@@ -652,7 +657,19 @@ const CustomerUpload: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <DataTable<Customer>
           data={filteredCustomers}
-          columns={['Names', 'Address1', 'City', 'State', 'PostalCode', 'CombinedAddress']}
+          columns={[
+            'Names', 
+            'Address1', 
+            'City', 
+            'State', 
+            'PostalCode',
+            'propertyType',
+            'propertySize',
+            'yearBuilt',
+            'bedrooms',
+            'bathrooms',
+            'lotSize'
+          ]}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onUndelete={handleUndelete}
