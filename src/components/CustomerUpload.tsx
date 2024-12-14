@@ -70,11 +70,11 @@ const CustomerUpload: React.FC = () => {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvFirstRow, setCsvFirstRow] = useState<Record<string, string>>({});
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({
-    name: '',
-    email: '',
-    address: '',
-    city: '',
-    state: ''
+    Names: '',
+    Address1: '',
+    City: '',
+    State: '',
+    PostalCode: ''
   });
   const [pendingFileData, setPendingFileData] = useState<string | null>(null);
 
@@ -148,10 +148,16 @@ const CustomerUpload: React.FC = () => {
           name: id === 'manual' ? 'Manually Added' : `Upload ${id}`,
           count: customers.filter(c => c.uploadId === id).length
         })),
-      propertyTypes: Array.from(new Set(customers.map(c => c.propertyType))).filter(Boolean),
-      cities: Array.from(new Set(customers.map(c => c.city))).filter(Boolean),
-      states: Array.from(new Set(customers.map(c => c.state))).filter(Boolean),
-      years: Array.from(new Set(customers.map(c => c.yearBuilt))).filter(Boolean),
+      propertyTypes: Array.from(new Set(customers.map(c => {
+        const match = c.CombinedAddress.match(/\|\s*([^|]+?)\s*\|/);
+        return match ? match[1].trim() : '';
+      }))).filter(Boolean),
+      years: Array.from(new Set(customers.map(c => {
+        const match = c.CombinedAddress.match(/Built:\s*(\d+)/);
+        return match ? match[1] : '';
+      }))).filter(Boolean),
+      cities: Array.from(new Set(customers.map(c => c.City))).filter(Boolean),
+      states: Array.from(new Set(customers.map(c => c.State))).filter(Boolean),
       hvacZones: ['1', '2', '3', '4'].map(zones => ({
         value: zones,
         label: `${zones} ${zones === '1' ? 'Zone' : 'Zones'}`
@@ -203,27 +209,25 @@ const CustomerUpload: React.FC = () => {
 
       const uploadId = Date.now().toString();
       const mappedData = results.data.map(row => ({
-        name: row.Names || row.Name || row.names || '',
-        email: row.Email || '',
-        address: row.Address1 || row['Address 1'] || row.address1 || row.address || '',
-        city: row.City || row.city || '',
-        state: row.State || row.state || '',
-        propertyType: '',
-        propertySize: '',
-        yearBuilt: '',
+        Names: row[columnMapping.Names] || '',
+        Address1: row[columnMapping.Address1] || '',
+        City: row[columnMapping.City] || '',
+        State: row[columnMapping.State] || '',
+        PostalCode: row[columnMapping.PostalCode] || '',
+        CombinedAddress: `${row[columnMapping.Address1] || ''}, ${row[columnMapping.City] || ''}, ${row[columnMapping.State] || ''} ${row[columnMapping.PostalCode] || ''}`.trim(),
         uploadId
       }));
 
-      addCustomers(mappedData, uploadId);
+      addCustomers(mappedData as unknown as Omit<Customer, "id" | "user_id">[], uploadId);
       toast.success('Customer data uploaded successfully');
       setShowColumnMapModal(false);
       setPendingFileData(null);
       setColumnMapping({
-        name: '',
-        email: '',
-        address: '',
-        city: '',
-        state: ''
+        Names: '',
+        Address1: '',
+        City: '',
+        State: '',
+        PostalCode: ''
       });
     } catch (error) {
       console.error('Upload error:', error);
@@ -249,19 +253,14 @@ const CustomerUpload: React.FC = () => {
       for (const customer of customersToProcess) {
         try {
           const propertyData = await getPropertyData(
-            customer.address,
-            customer.city,
-            customer.state
+            customer.Address1,
+            customer.City,
+            customer.State
           );
 
           updateCustomer(customer.id, {
             ...customer,
-            propertyType: propertyData.propertyType,
-            propertySize: propertyData.propertySize,
-            yearBuilt: propertyData.yearBuilt,
-            bedrooms: propertyData.bedrooms,
-            bathrooms: propertyData.bathrooms,
-            lotSize: propertyData.lotSize
+            CombinedAddress: `${customer.Address1}, ${customer.City}, ${customer.State} ${customer.PostalCode} | ${propertyData.propertyType} | ${propertyData.propertySize} | Built: ${propertyData.yearBuilt} | ${propertyData.bedrooms} bed | ${propertyData.bathrooms} bath | Lot: ${propertyData.lotSize}`
           });
 
           successCount++;
@@ -299,12 +298,24 @@ const CustomerUpload: React.FC = () => {
 
       for (const customer of customersToProcess) {
         try {
+          const propertySizeMatch = customer.CombinedAddress.match(/\|\s*([\d,]+)\s*sqft/);
+          const propertyTypeMatch = customer.CombinedAddress.match(/\|\s*([^|]+?)\s*\|/);
+          const yearBuiltMatch = customer.CombinedAddress.match(/Built:\s*(\d+)/);
+          const bedroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bed/);
+          const bathroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bath/);
+          
+          const propertySize = propertySizeMatch ? propertySizeMatch[1] : '2,500';
+          const propertyType = propertyTypeMatch ? propertyTypeMatch[1].trim() : 'Single Family';
+          const yearBuilt = yearBuiltMatch ? yearBuiltMatch[1] : '2000';
+          const bedrooms = bedroomsMatch ? bedroomsMatch[1] : '3';
+          const bathrooms = bathroomsMatch ? bathroomsMatch[1] : '2';
+
           const zones = calculateHVACZones({
-            grossSquareFootage: parseInt(customer.propertySize?.replace(/[^0-9]/g, '') || '0'),
+            grossSquareFootage: parseInt(propertySize.replace(/[^0-9]/g, '') || '0'),
             basementSquareFootage: 0,
-            livingSquareFootage: parseInt(customer.propertySize?.replace(/[^0-9]/g, '') || '0'),
+            livingSquareFootage: parseInt(propertySize.replace(/[^0-9]/g, '') || '0'),
             hasBasement: 'N',
-            fullBaths: parseFloat(customer.bathrooms || '0'),
+            fullBaths: 2,
             halfBaths: 0
           });
 
@@ -321,15 +332,15 @@ const CustomerUpload: React.FC = () => {
             created_at: new Date().toISOString(),
             property_details: {
               address: {
-                streetAddress: customer.address,
-                city: customer.city,
-                state: customer.state
+                streetAddress: customer.Address1,
+                city: customer.City,
+                state: customer.State
               },
-              type: customer.propertyType || 'Single Family',
-              size: customer.propertySize || '2,500 sqft',
-              yearBuilt: customer.yearBuilt || '2000',
-              bedrooms: customer.bedrooms || '3',
-              bathrooms: customer.bathrooms || '2'
+              type: propertyType,
+              size: `${propertySize} sqft`,
+              yearBuilt,
+              bedrooms,
+              bathrooms
             }
           });
 
@@ -357,9 +368,10 @@ const CustomerUpload: React.FC = () => {
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(customer => 
-        customer.name.toLowerCase().includes(search) ||
-        customer.email.toLowerCase().includes(search) ||
-        customer.address.toLowerCase().includes(search)
+        customer.Names.toLowerCase().includes(search) ||
+        customer.Address1.toLowerCase().includes(search) ||
+        customer.City.toLowerCase().includes(search) ||
+        customer.State.toLowerCase().includes(search)
       );
     }
 
@@ -368,29 +380,42 @@ const CustomerUpload: React.FC = () => {
     }
 
     if (filters.propertyType) {
-      filtered = filtered.filter(customer => customer.propertyType === filters.propertyType);
+      filtered = filtered.filter(customer => {
+        const propertyTypeMatch = customer.CombinedAddress.match(/\|\s*([^|]+?)\s*\|/);
+        const propertyType = propertyTypeMatch ? propertyTypeMatch[1].trim() : '';
+        return propertyType === filters.propertyType;
+      });
     }
 
     if (filters.city) {
-      filtered = filtered.filter(customer => customer.city === filters.city);
+      filtered = filtered.filter(customer => customer.City === filters.city);
     }
 
     if (filters.state) {
-      filtered = filtered.filter(customer => customer.state === filters.state);
+      filtered = filtered.filter(customer => customer.State === filters.state);
     }
 
     if (filters.yearBuilt) {
-      filtered = filtered.filter(customer => customer.yearBuilt === filters.yearBuilt);
+      filtered = filtered.filter(customer => {
+        const yearBuiltMatch = customer.CombinedAddress.match(/Built:\s*(\d+)/);
+        const yearBuilt = yearBuiltMatch ? yearBuiltMatch[1] : '';
+        return yearBuilt === filters.yearBuilt;
+      });
     }
 
     if (filters.hvacZones) {
       filtered = filtered.filter(customer => {
+        const propertySizeMatch = customer.CombinedAddress.match(/\|\s*([\d,]+)\s*sqft/);
+        const bathroomsMatch = customer.CombinedAddress.match(/(\d+)\s*bath/);
+        const propertySize = propertySizeMatch ? propertySizeMatch[1].replace(/,/g, '') : '0';
+        const bathrooms = bathroomsMatch ? bathroomsMatch[1] : '0';
+        
         const zones = calculateHVACZones({
-          grossSquareFootage: parseInt(customer.propertySize?.replace(/[^0-9]/g, '') || '0'),
+          grossSquareFootage: parseInt(propertySize),
           basementSquareFootage: 0,
-          livingSquareFootage: parseInt(customer.propertySize?.replace(/[^0-9]/g, '') || '0'),
+          livingSquareFootage: parseInt(propertySize),
           hasBasement: 'N',
-          fullBaths: parseFloat(customer.bathrooms || '0'),
+          fullBaths: parseFloat(bathrooms),
           halfBaths: 0
         });
         return zones.toString() === filters.hvacZones;
@@ -576,9 +601,9 @@ const CustomerUpload: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <DataTable
+        <DataTable<Customer>
           data={filteredCustomers}
-          columns={['name', 'email', 'address', 'city', 'state', 'propertyType', 'propertySize', 'yearBuilt', 'bedrooms', 'bathrooms', 'lotSize']}
+          columns={['Names', 'Address1', 'City', 'State', 'PostalCode', 'CombinedAddress']}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onUndelete={handleUndelete}
@@ -597,17 +622,8 @@ const CustomerUpload: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
-                  value={showEditModal.name}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, name: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={showEditModal.email}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, email: e.target.value })}
+                  value={showEditModal.Names}
+                  onChange={(e) => setShowEditModal({ ...showEditModal, Names: e.target.value })}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
@@ -615,8 +631,12 @@ const CustomerUpload: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                 <input
                   type="text"
-                  value={showEditModal.address}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, address: e.target.value })}
+                  value={showEditModal.Address1}
+                  onChange={(e) => setShowEditModal({ 
+                    ...showEditModal, 
+                    Address1: e.target.value,
+                    CombinedAddress: `${e.target.value}, ${showEditModal.City}, ${showEditModal.State} ${showEditModal.PostalCode}`.trim()
+                  })}
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
@@ -625,8 +645,12 @@ const CustomerUpload: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                   <input
                     type="text"
-                    value={showEditModal.city}
-                    onChange={(e) => setShowEditModal({ ...showEditModal, city: e.target.value })}
+                    value={showEditModal.City}
+                    onChange={(e) => setShowEditModal({ 
+                      ...showEditModal, 
+                      City: e.target.value,
+                      CombinedAddress: `${showEditModal.Address1}, ${e.target.value}, ${showEditModal.State} ${showEditModal.PostalCode}`.trim()
+                    })}
                     className="w-full p-2 border rounded-lg"
                   />
                 </div>
@@ -634,11 +658,28 @@ const CustomerUpload: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                   <input
                     type="text"
-                    value={showEditModal.state}
-                    onChange={(e) => setShowEditModal({ ...showEditModal, state: e.target.value })}
+                    value={showEditModal.State}
+                    onChange={(e) => setShowEditModal({ 
+                      ...showEditModal, 
+                      State: e.target.value,
+                      CombinedAddress: `${showEditModal.Address1}, ${showEditModal.City}, ${e.target.value} ${showEditModal.PostalCode}`.trim()
+                    })}
                     className="w-full p-2 border rounded-lg"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                <input
+                  type="text"
+                  value={showEditModal.PostalCode}
+                  onChange={(e) => setShowEditModal({ 
+                    ...showEditModal, 
+                    PostalCode: e.target.value,
+                    CombinedAddress: `${showEditModal.Address1}, ${showEditModal.City}, ${showEditModal.State} ${e.target.value}`.trim()
+                  })}
+                  className="w-full p-2 border rounded-lg"
+                />
               </div>
             </div>
             <div className="flex justify-end space-x-4 mt-6">
@@ -766,11 +807,11 @@ const CustomerUpload: React.FC = () => {
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 {Object.entries({
-                  name: 'Customer Name',
-                  email: 'Email',
-                  address: 'Address',
-                  city: 'City',
-                  state: 'State'
+                  Names: 'Customer Name',
+                  Address1: 'Address',
+                  City: 'City',
+                  State: 'State',
+                  PostalCode: 'Postal Code'
                 }).map(([field, label]) => (
                   <div key={field}>
                     <label className="block text-sm font-medium text-gray-700 mb-1">

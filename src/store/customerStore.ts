@@ -5,21 +5,16 @@ import { useAuthStore } from './authStore';
 export interface Customer {
   id: string;
   user_id: string;
-  name: string;
-  email: string;
-  address: string;
-  city: string;
-  state: string;
-  propertyType: string;
-  propertySize: string;
-  yearBuilt: string;
+  Names: string;
+  Address1: string;
+  City: string;
+  State: string;
+  PostalCode: string;
+  CombinedAddress: string;
   uploadId?: string;
   deleted?: boolean;
   created_at?: string;
   updated_at?: string;
-  bedrooms?: string;
-  bathrooms?: string;
-  lotSize?: string;
 }
 
 interface CustomerStore {
