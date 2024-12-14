@@ -17,11 +17,31 @@ export interface Customer {
   updated_at?: string;
 }
 
+export interface OutputRecord {
+  id: string
+  customer_id: string
+  names: string
+  address1: string
+  city: string
+  state: string
+  postalcode: string
+  combinedaddress: string
+  propertytype: string
+  propertysize: string
+  yearbuilt: string
+  bedrooms: number
+  bathrooms: number
+  lotsize: string
+  created_at: string
+  updated_at: string
+}
+
 interface CustomerStore {
   customers: Customer[];
   selectedUploadId: string | null;
   isLoading: boolean;
   error: string | null;
+  outputs: OutputRecord[];
   fetchCustomers: () => Promise<void>;
   addCustomers: (customers: Omit<Customer, 'id' | 'user_id'>[], uploadId: string) => Promise<void>;
   removeCustomersByUploadId: (uploadId: string) => Promise<void>;
@@ -36,6 +56,7 @@ export const useCustomerStore = create<CustomerStore>()((set) => ({
   selectedUploadId: null,
   isLoading: false,
   error: null,
+  outputs: [],
 
   fetchCustomers: async () => {
     set({ isLoading: true, error: null });

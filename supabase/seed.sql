@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS quotes CASCADE;
 DROP TABLE IF EXISTS templates CASCADE;
 DROP TABLE IF EXISTS pricebook_entries CASCADE;
+DROP TABLE IF EXISTS OUTPUT CASCADE;
 
 -- Create tables with correct columns
 CREATE TABLE customers (
@@ -49,6 +50,26 @@ CREATE TABLE pricebook_entries (
     user_id UUID REFERENCES auth.users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS OUTPUT (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id UUID REFERENCES CUSTOMER(id),
+    names TEXT,
+    address1 TEXT,
+    city TEXT,
+    state TEXT,
+    postalcode TEXT,
+    combinedaddress TEXT,
+    -- Add new property-related columns
+    propertytype TEXT,
+    propertysize TEXT,
+    yearbuilt TEXT,
+    bedrooms INTEGER,
+    bathrooms INTEGER,
+    lotsize TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Update existing users to confirm emails and reset passwords
