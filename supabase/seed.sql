@@ -59,24 +59,23 @@ CREATE TABLE pricebook_entries (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS OUTPUT (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id UUID REFERENCES customers(id),
-    names TEXT,
-    address1 TEXT,
-    city TEXT,
-    state TEXT,
-    postalcode TEXT,
-    combinedaddress TEXT,
-    -- Add new property-related columns
-    propertytype TEXT,
-    propertysize TEXT,
-    yearbuilt TEXT,
-    bedrooms INTEGER,
-    bathrooms INTEGER,
-    lotsize TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS output (
+    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+    customer_id text UNIQUE NOT NULL,
+    names text,
+    address1 text,
+    city text,
+    state text,
+    postalcode text,
+    combinedaddress text,
+    property_type text,
+    property_size text,
+    year_built text,
+    bedrooms integer,
+    bathrooms integer,
+    lot_size text,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now())
 );
 
 -- Update existing users to confirm emails and reset passwords

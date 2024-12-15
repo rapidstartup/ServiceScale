@@ -66,14 +66,39 @@ export const useCustomerStore = create<CustomerStore>()((set) => ({
   fetchCustomers: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
+      // First fetch customers
+      const { data: customerData, error: customerError } = await supabase
         .from('customers')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (customerError) throw customerError;
 
-      set({ customers: data || [] });
+      // Then fetch output data
+      const { data: outputData, error: outputError } = await supabase
+        .from('output')
+        .select('*');
+
+      if (outputError) throw outputError;
+
+      // Merge output data with customers
+      const mergedCustomers = (customerData || []).map(customer => {
+        const output = outputData?.find(o => o.customer_id === customer.id);
+        if (output) {
+          return {
+            ...customer,
+            propertyType: output.property_type,
+            propertySize: output.property_size,
+            yearBuilt: output.year_built,
+            bedrooms: output.bedrooms?.toString(),
+            bathrooms: output.bathrooms?.toString(),
+            lotSize: output.lot_size
+          };
+        }
+        return customer;
+      });
+
+      set({ customers: mergedCustomers });
     } catch (error) {
       set({ error: (error as Error).message });
     } finally {

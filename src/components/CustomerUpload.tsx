@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { parse } from 'papaparse';
 import { Users, Plus, ChevronDown, ChevronUp, Database, FileText, Search, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -77,6 +77,46 @@ const CustomerUpload: React.FC = () => {
   });
   const [pendingFileData, setPendingFileData] = useState<string | null>(null);
   const [loadingPropertyIds, setLoadingPropertyIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadOutputData = async () => {
+      try {
+        const { data: outputData, error } = await supabase
+          .from('output')
+          .select('*');
+
+        if (error) {
+          console.error('Error loading output data:', error);
+          return;
+        }
+
+        if (outputData && outputData.length > 0) {
+          // Update customers with output data
+          useCustomerStore.setState(state => ({
+            customers: state.customers.map(customer => {
+              const output = outputData.find(o => o.customer_id === customer.id);
+              if (output) {
+                return {
+                  ...customer,
+                  propertyType: output.property_type,
+                  propertySize: output.property_size,
+                  yearBuilt: output.year_built,
+                  bedrooms: output.bedrooms?.toString(),
+                  bathrooms: output.bathrooms?.toString(),
+                  lotSize: output.lot_size
+                };
+              }
+              return customer;
+            })
+          }));
+        }
+      } catch (error) {
+        console.error('Error in loadOutputData:', error);
+      }
+    };
+
+    loadOutputData();
+  }, [customers.length]); // Reload when customers array length changes
 
   const handleEdit = (customer: Customer) => {
     setShowEditModal(customer);
