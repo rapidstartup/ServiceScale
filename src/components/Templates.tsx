@@ -1,35 +1,68 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FileText, Plus, Trash2, Edit2 } from 'lucide-react';
+import { FileText, Check, Upload } from 'lucide-react';
 import { useTemplateStore } from '../store/templateStore';
-import { useAuthStore } from '../store/authStore';
-import toast from 'react-hot-toast';
+import { useSettingsStore } from '../store/settingsStore';
+import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 const Templates: React.FC = () => {
-  const navigate = useNavigate();
-  const { templates, deleteTemplate } = useTemplateStore();
-  const user = useAuthStore(state => state.user);
-  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const { templates, updateTemplate } = useTemplateStore();
+  const { settings, updateSettings } = useSettingsStore();
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const isAdmin = user?.role === 'admin';
-
-  const handleDelete = (templateId: string) => {
-    setShowDeleteModal(templateId);
+  const handleSetDefault = async (templateId: string) => {
+    try {
+      // Update all templates to not be default
+      for (const template of templates) {
+        await updateTemplate(template.id, { is_default: false });
+      }
+      // Set the selected template as default
+      await updateTemplate(templateId, { is_default: true });
+      toast.success('Default template updated');
+    } catch (error: Error | unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update default template';
+      toast.error(errorMessage);
+    }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!showDeleteModal) return;
-
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      await deleteTemplate(showDeleteModal);
-      setShowDeleteModal(null);
-      toast.success('Template deleted successfully');
-    } catch (error) {
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error('Failed to delete template');
-      }
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `logos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('assets')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('assets')
+        .getPublicUrl(filePath);
+
+      await updateSettings({ ...settings, logoUrl: publicUrl });
+      toast.success('Logo updated successfully');
+    } catch (error: Error | unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload logo';
+      toast.error(errorMessage);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleColorChange = async (color: string) => {
+    try {
+      await updateSettings({ ...settings, primaryColor: color });
+      toast.success('Brand color updated');
+    } catch (error: Error | unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update brand color';
+      toast.error(errorMessage);
     }
   };
 
@@ -40,91 +73,80 @@ const Templates: React.FC = () => {
           <FileText className="h-8 w-8 text-blue-600" />
           <h1 className="text-3xl font-bold text-gray-900">Quote Templates</h1>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => navigate('/templates/new')}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Template</span>
-          </button>
-        )}
+        <div className="flex items-center space-x-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Brand Color</label>
+            <input
+              type="color"
+              value={settings.primaryColor || '#3B82F6'}
+              onChange={(e) => handleColorChange(e.target.value)}
+              className="h-10 w-20 rounded border cursor-pointer"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company Logo</label>
+            <label className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+              <Upload className="h-4 w-4 mr-2" />
+              <span>{uploading ? 'Uploading...' : 'Upload Logo'}</span>
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                disabled={uploading}
+              />
+            </label>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {templates.map((template) => (
           <div
             key={template.id}
-            className="bg-white rounded-xl shadow-sm overflow-hidden"
+            className={`bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer transition-all
+              ${selectedTemplate === template.id ? 'ring-2 ring-blue-500' : ''}
+              ${template.is_default ? 'ring-2 ring-green-500' : ''}`}
+            onClick={() => setSelectedTemplate(template.id)}
           >
-            <img
-              src={template.preview_image}
-              alt={template.name}
-              className="w-full h-48 object-cover"
-            />
             <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {template.name}
-                  </h3>
-                  {template.is_default && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-2">
-                      Default Template
-                    </span>
-                  )}
-                </div>
-                {isAdmin && (
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => navigate(`/templates/${template.id}`)}
-                      className="p-2 text-blue-600 hover:text-blue-900 rounded-lg"
-                      title="Edit Template"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(template.id)}
-                      className="p-2 text-red-600 hover:text-red-900 rounded-lg"
-                      title="Delete Template"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">{template.name}</h2>
+                {template.is_default ? (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                    <Check className="h-4 w-4 mr-1" />
+                    Default
+                  </span>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetDefault(template.id);
+                    }}
+                    className="px-3 py-1 text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    Set as Default
+                  </button>
                 )}
               </div>
-              <p className="mt-2 text-sm text-gray-600">
-                {template.sections.length} sections
-              </p>
+
+              <div 
+                className="prose max-w-none"
+                style={{
+                  '--tw-prose-headings': settings.primaryColor,
+                  '--tw-prose-links': settings.primaryColor,
+                } as React.CSSProperties}
+                dangerouslySetInnerHTML={{ 
+                  __html: template.content.replace(
+                    '{logo}', 
+                    settings.logoUrl ? `<img src="${settings.logoUrl}" alt="Company Logo" class="h-12" />` : ''
+                  )
+                }}
+              />
             </div>
           </div>
         ))}
       </div>
-
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-bold mb-4">Delete Template</h2>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete this template? This action cannot be undone.
-            </p>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setShowDeleteModal(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

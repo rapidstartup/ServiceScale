@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuoteStore } from '../store/quoteStore';
 import { useTemplateStore } from '../store/templateStore';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import RichTextEditor from './editor/RichTextEditor';
 
 const QuoteDetail: React.FC = () => {
@@ -55,8 +55,16 @@ const QuoteDetail: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      <div className="flex items-center space-x-2 text-sm text-gray-600 mb-6">
+        <Link to="/quotes" className="hover:text-blue-600">
+          Quotes
+        </Link>
+        <ChevronRight className="h-4 w-4" />
+        <span className="text-gray-900">Quote #{quote?.id.slice(0, 7)}</span>
+      </div>
+
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Quote #{quote.id.slice(0, 7)}</h1>
+        <h1 className="text-3xl font-bold">Quote #{quote?.id.slice(0, 7)}</h1>
         <div className="flex items-center space-x-4">
           <div className="relative">
             <select

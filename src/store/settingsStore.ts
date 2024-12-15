@@ -11,9 +11,17 @@ interface HVACZoneRules {
   bathroomThreshold: number;
 }
 
+interface Settings {
+  logoUrl?: string;
+  primaryColor?: string;
+  // ... other settings
+}
+
 interface SettingsStore {
   hvacZoneRules: HVACZoneRules;
   updateHVACZoneRules: (rules: Partial<HVACZoneRules>) => void;
+  settings: Settings;
+  updateSettings: (settings: Settings) => Promise<void>;
 }
 
 const defaultHVACRules: HVACZoneRules = {
@@ -30,11 +38,19 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       hvacZoneRules: defaultHVACRules,
+      settings: { primaryColor: '#3B82F6' },
       updateHVACZoneRules: (rules) =>
         set((state) => ({
           hvacZoneRules: {
             ...state.hvacZoneRules,
             ...rules
+          }
+        })),
+      updateSettings: async (newSettings) =>
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            ...newSettings
           }
         }))
     }),
