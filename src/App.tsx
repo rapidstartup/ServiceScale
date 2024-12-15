@@ -23,6 +23,7 @@ import Settings from './components/admin/Settings';
 import HVACZoneSettings from './components/admin/HVACZoneSettings';
 import NewRule from './components/admin/NewRule';
 import { Toaster } from 'react-hot-toast';
+import QuoteDetail from './components/QuoteDetail';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -119,6 +120,7 @@ export default function App() {
             <QuoteTemplate />
           </ProtectedRoute>
         } />
+        <Route path="/quote/:id" element={<QuoteDetail />} />
         
         {/* Admin Routes */}
         <Route path="/admin" element={

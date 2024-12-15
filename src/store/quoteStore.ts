@@ -10,6 +10,7 @@ export interface Quote {
   service: string;
   total: number;
   template_id: string;
+  content?: string;
   sent_at?: string;
   opened_at?: string;
   clicked_at?: string;
