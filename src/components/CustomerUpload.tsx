@@ -12,6 +12,7 @@ import { useTemplateStore } from '../store/templateStore';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
 import { getPropertyData } from '../services/attomApi';
+import { useQuoteStore } from '../store/quoteStore';
 
 interface CSVRow {
   [key: string]: string | undefined;
@@ -370,9 +371,9 @@ const CustomerUpload: React.FC = () => {
 
       for (const customer of customersToProcess) {
         try {
-          // Get the property data from the OUTPUT table first
+          // Fix the table name case
           const { data: outputData } = await supabase
-            .from('OUTPUT')
+            .from('output')
             .select('*')
             .eq('customer_id', customer.id)
             .single();
@@ -380,19 +381,18 @@ const CustomerUpload: React.FC = () => {
           let propertyDetails;
           
           if (outputData) {
-            // Use the OUTPUT table data if available
             propertyDetails = {
               address: {
                 streetAddress: outputData.address1,
                 city: outputData.city,
                 state: outputData.state
               },
-              type: outputData.propertytype,
-              size: outputData.propertysize,
-              yearBuilt: outputData.yearbuilt,
+              type: outputData.property_type,
+              size: outputData.property_size,
+              yearBuilt: outputData.year_built,
               bedrooms: outputData.bedrooms,
               bathrooms: outputData.bathrooms,
-              lotSize: outputData.lotsize
+              lotSize: outputData.lot_size
             };
           } else {
             // Fallback to parsing CombinedAddress if no OUTPUT record exists
@@ -416,6 +416,12 @@ const CustomerUpload: React.FC = () => {
             };
           }
 
+          // Get the default template with its content
+          const defaultTemplate = templates.find(t => t.is_default);
+          if (!defaultTemplate) {
+            throw new Error('No default template found');
+          }
+
           const zones = calculateHVACZones({
             grossSquareFootage: parseInt(propertyDetails.size.replace(/[^0-9]/g, '') || '0'),
             basementSquareFootage: 0,
@@ -429,15 +435,18 @@ const CustomerUpload: React.FC = () => {
           const zonePrice = pricebookEntries.find(entry => entry.name === 'Additional Zone')?.price || 2500;
           const total = basePrice + (zones - 1) * zonePrice;
 
+          // Create quote with content
           const { error: quoteError } = await supabase
             .from('quotes')
             .insert({
               customer_id: customer.id,
               service: `${zones}-Zone HVAC System`,
               total,
-              template_id: templates.find(t => t.is_default)?.id || '',
+              template_id: defaultTemplate.id,
+              content: defaultTemplate.content,
               property_details: propertyDetails,
-              user_id: useAuthStore.getState().user?.id
+              user_id: useAuthStore.getState().user?.id,
+              status: 'active'
             });
 
           if (quoteError) throw quoteError;
@@ -446,6 +455,13 @@ const CustomerUpload: React.FC = () => {
           console.error('Error generating quote for customer:', customer.id, error);
           errorCount++;
         }
+      }
+
+      // After successful generation, refresh the quotes list
+      // You may need to import useQuoteStore and call its refresh method
+      const { refreshQuotes } = useQuoteStore.getState();
+      if (typeof refreshQuotes === 'function') {
+        await refreshQuotes();
       }
 
       toast.success(`Successfully generated ${successCount} quotes`);

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useQuoteStore } from '../store/quoteStore';
 import { useTemplateStore } from '../store/templateStore';
-import { QuoteTemplate } from '../types';
 import { toast } from 'react-hot-toast';
 
 const NewQuote: React.FC = () => {
@@ -12,7 +11,7 @@ const NewQuote: React.FC = () => {
   const { addQuote } = useQuoteStore();
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const [selectedTemplateId, setSelectedTemplateId] = useState(
-    templates.find(t => t.isDefault)?.id || templates[0]?.id
+    templates.find(t => t.is_default)?.id || templates[0]?.id
   );
   const [formData, setFormData] = useState({
     customerName: '',
@@ -34,24 +33,29 @@ const NewQuote: React.FC = () => {
 
   const selectedTemplateData = templates.find(t => t.id === selectedTemplateId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!selectedTemplateData) {
+      toast.error('Please select a template');
+      return;
+    }
+
     const newQuote = {
-      id: `Q${Date.now().toString().slice(-6)}`,
       status: 'active' as const,
-      customerName: formData.customerName,
+      customer_id: '',
       service: formData.service,
       total: formData.total,
-      createdAt: new Date().toISOString(),
-      sentAt: new Date().toISOString(),
-      templateId: selectedTemplateId,
-      propertyDetails: formData.propertyDetails
+      template_id: selectedTemplateId,
+      content: selectedTemplateData.content,
+      property_details: formData.propertyDetails,
+      created_at: new Date().toISOString(),
+      sent_at: new Date().toISOString()
     };
 
-    addQuote(newQuote);
+    const quote = await addQuote(newQuote);
     toast.success('Quote created successfully');
-    navigate(`/quote/${newQuote.id}`);
+    navigate(`/quote/${quote.id}`);
   };
 
   return (

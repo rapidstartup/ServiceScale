@@ -34,11 +34,12 @@ interface QuoteStore {
   isLoading: boolean;
   error: string | null;
   fetchQuotes: () => Promise<void>;
-  addQuote: (quote: Omit<Quote, 'id' | 'user_id'>) => Promise<void>;
+  addQuote: (quote: Omit<Quote, 'id' | 'user_id'>) => Promise<Quote>;
   updateQuote: (id: string, quote: Partial<Quote>) => Promise<void>;
   deleteQuote: (id: string) => Promise<void>;
   updateQuoteStatus: (id: string, status: Quote['status']) => Promise<void>;
   trackQuoteView: (id: string) => Promise<void>;
+  refreshQuotes: () => Promise<void>;
 }
 
 export const useQuoteStore = create<QuoteStore>()((set) => ({
@@ -70,14 +71,9 @@ export const useQuoteStore = create<QuoteStore>()((set) => ({
       const user = useAuthStore.getState().user;
       if (!user) throw new Error('User not authenticated');
 
-      const quoteWithMetadata = {
-        ...quote,
-        user_id: user.id
-      };
-
       const { data, error } = await supabase
         .from('quotes')
-        .insert(quoteWithMetadata)
+        .insert({ ...quote, user_id: user.id })
         .select()
         .single();
 
@@ -193,6 +189,17 @@ export const useQuoteStore = create<QuoteStore>()((set) => ({
       throw error;
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  refreshQuotes: async () => {
+    const { data: quotes } = await supabase
+      .from('quotes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (quotes) {
+      set({ quotes });
     }
   }
 }));

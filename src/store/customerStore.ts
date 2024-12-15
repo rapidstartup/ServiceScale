@@ -10,8 +10,9 @@ export interface Customer {
   State: string;
   PostalCode: string;
   CombinedAddress: string;
-  uploadId?: string;
+  uploadId: string;
   deleted?: boolean;
+  created_at?: string;
   user_id?: string;
   propertyType?: string;
   propertySize?: string;
