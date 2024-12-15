@@ -5,11 +5,11 @@ import Image from '@tiptap/extension-image';
 import { Bold, Italic, List, ListOrdered, Image as ImageIcon } from 'lucide-react';
 
 interface RichTextEditorProps {
-  content: string;
-  onChange: (content: string) => void;
+  initialValue?: string;
+  onSave: (content: string) => void;
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange }) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onSave }) => {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -19,9 +19,9 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange }) =>
         },
       }),
     ],
-    content,
+    content: initialValue,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      onSave(editor.getHTML());
     },
   });
 
